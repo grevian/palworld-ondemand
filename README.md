@@ -1,6 +1,8 @@
-# minecraft-ondemand
+# palworld-ondemand
 
-Almost free serverless on-demand Minecraft server in AWS
+Almost free serverless on-demand Palworld Dedicated Server in AWS
+
+# 🚧 **Under construction**: This section is still in progress. Stay tuned for updates.
 
 ## Table of Contents
 
@@ -32,22 +34,22 @@ Too much text for you?  Click the `cdk` folder in the source above for a fast an
 
 ## Background
 
-Instead of paying a minecraft hosting service for a private server for you and your friends, host it yourself. By utilizing several AWS services, a minecraft server can automatically start when you're ready to use it, and shut down when you are done. The final cost will depend on use but can be as little as a a dollar or two per month. The cost estimate breakdown is below.
+Instead of paying a palworld hosting service for a private server for you and your friends, host it yourself. By utilizing several AWS services, a palworld server can automatically start when you're ready to use it, and shut down when you are done. The final cost will depend on use but can be very minimal. The cost estimate breakdown is below.
 
-This is a _reasonably_ cost effective solution for someone that doesn't need their server running 24/7. If that's you, read on!
+This is a reasonably cost-effective solution for someone that doesn't need their server running 24/7. If that's you, read
 
 ## Workflow
 
 The process works as follows:
 
-1. Open Minecraft Multiplayer, let it look for our server, it will time out.
-2. The DNS lookup query is logged in Route 53 on our public hosted zone.
-3. CloudWatch forwards the query to a Lambda function.
-4. The Lambda function modifies an existing ECS Fargate service to a desired task count of 1.
-5. Fargate launches two containers, Minecraft and a watchdog, which updates the DNS record to the new IP
-6. The watchdog optionally sends a text message through Twilio and/or publishes to an SNS topic when the server is ready.
-7. Refresh Minecraft server list, server is ready to connect.
-8. After 10 minutes without a connection or 20 minutes after the last client disconnects (customizable) the watchdog sets the desired task count to zero and shuts down.
+1. Open Palworld Multiplayer, let it look for our server, it will time out.
+2. The DNS lookup query is logged in **Route 53** on our public hosted zone.
+3. **CloudWatch** forwards the query to a **Lambda** function.
+4. The **Lambda** function modifies an existing **ECS Fargate** service to a desired task count of **1**.
+5. **Fargate** launches two containers, **Palworld** and a watchdog, which updates the DNS record to the new IP.
+6. The watchdog sends a notification through **Slack** when the server is ready. Additionally, you can initiate the server start command directly from Slack.
+7. Refresh **Palworld** server list, server is ready to connect.
+8. After 10 minutes without a connection or 20 minutes after the last client disconnects (customizable), the watchdog sets the desired task count to **zero** and shuts down, sending a shutdown notification through Slack.
 
 ## Diagram
 
@@ -57,14 +59,18 @@ The process works as follows:
 
 - AWS Account
 - Domain name with public [DNS served from Route 53]. Does not need to be registered through Route 53.
-- Minecraft Java edition OR Bedrock edition client
-- Use of the excellent [Minecraft Java Docker] or [Minecraft Bedrock Docker] server image (used within task definition, no direct download required)
+- Palworld client
+- Use of the excellent thijsvanloef/palworld-server-docker server image (used within task definition, no direct download required)
 
 ## Cost Breakdown
 
 - Link to [AWS Estimate] assuming 20 hours a month usage.
-- tl;dr : $0.50 per month for DNS zones, $0.0149 (one point five cents) per hour for Fargate Spot or $0.049 (four point nine cents) per hour for regular Fargate. All other costs negligible, a couple of pennies per month at most.
-- tl;dr;tl;dt : $1.50 / month for 20 hours of play.
+
+- tl;dr:
+   - $0.50 per month for DNS zones, $0.29072 per hour for Fargate usage with 4 vCPU and 16GB memory. All other costs negligible, a couple of pennies per month at most.
+
+- tl;dr;tl;dt:
+   - Approximately $5.81 / month for 20 hours of usage with 4 vCPU and 16GB memory configuration, plus $0.50 for DNS zones, totaling nearly $6.31 / month.
 
 # Installation and Setup
 
@@ -74,9 +80,9 @@ For a quick start, a Cloud Deployment Kit (CDK) implementation is available! Cli
 
 To simplify the procedure, your ECS cluster name, service name, and sns topic name need to be defined before you start. This is because we will be referencing them before they are created. In the documentation I use these:
 
-- Cluster name : `minecraft`
-- Service name : `minecraft-server`
-- SNS Topic : `minecraft-notifications`
+- Cluster name : `palworld`
+- Service name : `palworld-server`
+- SNS Topic : `palworld-notifications`
 
 Things you need to go find because they'll be used in the procedure are:
 
@@ -103,7 +109,7 @@ A [Default VPC] should do the trick, chances are you've already got one. We'll b
 
 ## Elastic File System
 
-EFS is where the world data and server properties are stored, and persists between runs of the minecraft server. By using an "Access Point" the mounted folder is created automatically, so no mounting of the EFS to an external resource is required to get up and running. To make changes to the files like `server.properties` later however, a user can either mount the EFS file system to a Linux host in their account if they're comfortable with that, or I detail another method below using AWS DataSync and S3 that anyone can use without Linux experience.
+EFS is where the world data and server properties are stored, and persists between runs of the palworld server. By using an "Access Point" the mounted folder is created automatically, so no mounting of the EFS to an external resource is required to get up and running. To make changes to the files like `server.properties` later however, a user can either mount the EFS file system to a Linux host in their account if they're comfortable with that, or I detail another method below using AWS DataSync and S3 that anyone can use without Linux experience.
 
 ### Creating the EFS
 
@@ -112,7 +118,7 @@ Open the Elastic File System console and create a new file system. Believe it or
 Select your newly created filesystem, and tap the `Access Points` tab. Create a new access point using the following specifics:
 
 - Details
-  - Root directory path : `/minecraft`
+  - Root directory path : `/palworld`
 - POSIX User
   - User ID : `1000`
   - Group ID : `1000`
@@ -125,17 +131,17 @@ Click `Create access point`. Record the File System ID and the Access Point ID f
 
 ### Allow access to EFS from within the VPC
 
-Our EFS by default is assigned the default security group, which allows connections from all members of that default security group. Our ECS Service will not be using the default security group however, because we are opening Minecraft to the public internet. So, we need to add EFS access to the default security group (more advanced users may want to create a new dedicated security group with this rule and assign it to the mount points within the EFS console, however that will not be described here).
+Our EFS by default is assigned the default security group, which allows connections from all members of that default security group. Our ECS Service will not be using the default security group however, because we are opening Palworld to the public internet. So, we need to add EFS access to the default security group (more advanced users may want to create a new dedicated security group with this rule and assign it to the mount points within the EFS console, however that will not be described here).
 
 Open the VPC console, find `Security Groups` on the left hand side. Select the default security group in the list, then click on `Edit inbound rules`. Add a new rule, select `NFS` in the `Type` list and put your VPC IPv4 CIDR from your checklist as the source. After clicking `Save rules` double check that it added successfully by viewing it in the `Security Groups` detail pane.
 
 ## Lambda
 
-A lambda function must exist that turns on your minecraft service. We do this with a simple python function that change the "Tasks Desired" count from zero to one when it is invoked. We haven't created the ECS service yet, but that's okay, because we decided on the cluster name and service name before we started.
+A lambda function must exist that turns on your palworld service. We do this with a simple python function that change the "Tasks Desired" count from zero to one when it is invoked. We haven't created the ECS service yet, but that's okay, because we decided on the cluster name and service name before we started.
 
 Because we are relying on Route 53+CloudWatch to invoke the Lambda function, it _must_ reside in the N. Virginia (us-east-1) region.
 
-From the Lambda console, create a new function using `Author from scratch`. I've used Python 3.9 but the latest version available should be fine. Call it `minecraft-launcher`. The other defaults are fine, it will create an IAM role we will modify afterward. We do not need to specify a VPC.
+From the Lambda console, create a new function using `Author from scratch`. I've used Python 3.9 but the latest version available should be fine. Call it `palworld-launcher`. The other defaults are fine, it will create an IAM role we will modify afterward. We do not need to specify a VPC.
 
 Once the function has been created and you're in the code editor, replace the contents of the default lambda_function.py with this:
 
@@ -143,8 +149,8 @@ Once the function has been created and you're in the code editor, replace the co
 import boto3
 
 REGION = 'us-west-2'
-CLUSTER = 'minecraft'
-SERVICE = 'minecraft-server'
+CLUSTER = 'palworld'
+SERVICE = 'palworld-server'
 
 
 def lambda_handler(event, context):
@@ -179,7 +185,7 @@ Ensure that a domain name you own is set up in Route 53. If you don't own one, c
 
 ### Server DNS Record
 
-Add an A record with a 30 second TTL with a unique name that you will use to connect to your minecraft server. Something like minecraft.yourdomainname.com, or more complex if desired, as every time anyone _in the world_ performs a DNS lookup on this name, your Minecraft server will launch. The value of the record is irrelevant because it will be updated every time our container launches. Use 1.1.1.1 or 192.168.1.1 for now if you can't think of anything. The low TTL is so that the DNS clients and non-authoritative DNS servers won't cache the record long and you can connect quicker after the IP updates.
+Add an A record with a 30 second TTL with a unique name that you will use to connect to your palworld server. Something like palworld.yourdomainname.com, or more complex if desired, as every time anyone _in the world_ performs a DNS lookup on this name, your Palworld server will launch. The value of the record is irrelevant because it will be updated every time our container launches. Use 1.1.1.1 or 192.168.1.1 for now if you can't think of anything. The low TTL is so that the DNS clients and non-authoritative DNS servers won't cache the record long and you can connect quicker after the IP updates.
 
 ### Query Logging
 
@@ -191,11 +197,11 @@ From your hosted zone, click `Configure query logging` on the top right. Then, c
 
 You can receive a text or email or anything else you want to consume via Amazon SNS, if Twilio isn't your thing. This also allows this to be a 100% AWS solution.
 
-From the SNS console, create a `Standard` topic called `minecraft-notifications`. Also at your convenience, create a Subscription to the topic to a destination of your choice. Email is easy and free, SMS is beyond the scope of this documentation but there's plenty of resources out there to help you set it up.
+From the SNS console, create a `Standard` topic called `palworld-notifications`. Also at your convenience, create a Subscription to the topic to a destination of your choice. Email is easy and free, SMS is beyond the scope of this documentation but there's plenty of resources out there to help you set it up.
 
 ## IAM
 
-The IAM Console is where we configure the roles and policies required to give access to the Task running the Minecraft server and the Lambda Function used to start it.
+The IAM Console is where we configure the roles and policies required to give access to the Task running the Palworld server and the Lambda Function used to start it.
 
 We will be creating four distinct policies and one role. The policies will then be attached to the appropriate roles.
 
@@ -205,7 +211,7 @@ We will be creating four distinct policies and one role. The policies will then 
 
 This policy will allow for read/write access to our new Elastic File System Access Point. In the policy below, replace the zzz's with your account id and put your file system and access point id in the appropriate places. Change the region if necessary.
 
-Call this policy `efs.rw.minecraft-data`
+Call this policy `efs.rw.palworld-data`
 
 ```json
 {
@@ -235,7 +241,7 @@ This policy will allow for management of the Elastic Container Service tasks and
 
 Replace the `zzzzzzzzzzzz` below with the appriopriate account ID in your ARN. If you are not using the default cluster name or service name we decided above, change those as well. Change the region if necessary.
 
-Call this policy `ecs.rw.minecraft-service`
+Call this policy `ecs.rw.palworld-service`
 
 ```json
 {
@@ -245,8 +251,8 @@ Call this policy `ecs.rw.minecraft-service`
       "Effect": "Allow",
       "Action": ["ecs:*"],
       "Resource": [
-        "arn:aws:ecs:us-west-2:zzzzzzzzzzzz:service/minecraft/minecraft-server",
-        "arn:aws:ecs:us-west-2:zzzzzzzzzzzz:task/minecraft/*"
+        "arn:aws:ecs:us-west-2:zzzzzzzzzzzz:service/palworld/palworld-server",
+        "arn:aws:ecs:us-west-2:zzzzzzzzzzzz:task/palworld/*"
       ]
     },
     {
@@ -260,7 +266,7 @@ Call this policy `ecs.rw.minecraft-service`
 
 #### Route 53 Policy
 
-This policy gives permission to our ECS task to update the DNS `A` record associated with our minecraft server. Note: This will give your container access to change _all_ records within the hosted zone, and this may not be desirable if you're using this domain for anything else outside of this purpose. If you'd like to increase security, you can create a subdomain zone of the main domain to limit the impact. This is an advanced use case and the setup is described pretty well within the answers to [Delegate Zone Setup].
+This policy gives permission to our ECS task to update the DNS `A` record associated with our palworld server. Note: This will give your container access to change _all_ records within the hosted zone, and this may not be desirable if you're using this domain for anything else outside of this purpose. If you'd like to increase security, you can create a subdomain zone of the main domain to limit the impact. This is an advanced use case and the setup is described pretty well within the answers to [Delegate Zone Setup].
 
 Place the hosted zone identifier from our checklist and place it in the Resource line within this policy where the XXX's are.
 
@@ -294,7 +300,7 @@ If you have decided to receive SNS notifications, we need a policy that allows p
 
 Replace the zzz's with your account ID, and adjust the topic name or the region if you used something different.
 
-Call this policy `sns.publish.minecraft-notifications`
+Call this policy `sns.publish.palworld-notifications`
 
 ```json
 {
@@ -303,7 +309,7 @@ Call this policy `sns.publish.minecraft-notifications`
     {
       "Effect": "Allow",
       "Action": "sns:Publish",
-      "Resource": "arn:aws:sns:us-west-2:zzzzzzzzzzzz:minecraft-notifications"
+      "Resource": "arn:aws:sns:us-west-2:zzzzzzzzzzzz:palworld-notifications"
     }
   ]
 }
@@ -319,16 +325,16 @@ In the IAM console, select `Roles` and `Create role`. In the wizard, in the firs
 
 In the policy list, you can click `Filter policies` and select `Customer managed` to make this easier. Check the boxes for all of our created policies:
 
-- `efs.rw.minecraft-data`
-- `ecs.rw.minecraft-service`
+- `efs.rw.palworld-data`
+- `ecs.rw.palworld-service`
 - `route53.rw.yourdomainname`
-- `sns.publish.minecraft-notifications`
+- `sns.publish.palworld-notifications`
 
-Click `Next: Tags` then `Next: Review`. Call the role `ecs.task.minecraft-server` and click `Create role`.
+Click `Next: Tags` then `Next: Review`. Call the role `ecs.task.palworld-server` and click `Create role`.
 
 #### Lambda Role
 
-In the roles list, find the role created by the lambda function earlier. It will be called `minecraft-launcher-role-xxxxxxxx`. Click on it, then click `Attach policies`. Give it the `ecs.rw.minecraft-service` policy we created earlier.
+In the roles list, find the role created by the lambda function earlier. It will be called `palworld-launcher-role-xxxxxxxx`. Click on it, then click `Attach policies`. Give it the `ecs.rw.palworld-service` policy we created earlier.
 
 ## Elastic Container Service
 
@@ -338,10 +344,10 @@ The final task we need to do is create the ECS task, cluster, and service.
 
 Create a new Task Definition of `FARGATE` launch type. In the configuration wizard, use these options:
 
-- Task Definition Name: `minecraft-server`
-- Task Role: `ecs.task.minecraft-server`
+- Task Definition Name: `palworld-server`
+- Task Role: `ecs.task.palworld-server`
 - Network Mode: `awsvpc` (default)
-- Task Execution Role: `Create new role` (default if you've never created tasks before) or `ecsTaskExecutionRole` (default otherwise). Not to be confused with the `ecs.task.minecraft-server` role we used earlier.
+- Task Execution Role: `Create new role` (default if you've never created tasks before) or `ecsTaskExecutionRole` (default otherwise). Not to be confused with the `ecs.task.palworld-server` role we used earlier.
 - Task Memory: `2GB` (good to start, increase later if needed)
 - Task CPU: `1 vCPU` (good to start, increase later if needed)
 
@@ -349,10 +355,10 @@ Skip `Container Definitions` temporarily and scroll further down to Volumes. Cli
 
 Scroll back up and click `Add container`. Use defaults except for these specifics:
 
-- Container name: `minecraft-server`
+- Container name: `palworld-server`
 - Image:
-  - For Java edition: `itzg/minecraft-server`
-  - For Bedrock edition: `itzg/minecraft-bedrock-server`
+  - For Java edition: `itzg/palworld-server`
+  - For Bedrock edition: `itzg/palworld-bedrock-server`
 - Port Mappings:
   - For Java edition: `25565 TCP`
   - For Bedrock edition: `19132 UDP`
@@ -371,17 +377,17 @@ Under `Advanced container configuration` make these changes:
 
 Click `Add` and then click `Add container` again to add a second container to the list. Use defaults except for these specifics:
 
-- Container name: `minecraft-ecsfargate-watchdog`
-- Image: `doctorray/minecraft-ecsfargate-watchdog` (source for this container within this project if you want to build/host it yourself)
+- Container name: `palworld-ecsfargate-watchdog`
+- Image: `doctorray/palworld-ecsfargate-watchdog` (source for this container within this project if you want to build/host it yourself)
 
 Under `Advanced container configuration` make these changes:
 
 - Essential: YES checked (default)
 - Environmental Variables (required)
-  - `CLUSTER` : `minecraft`
-  - `SERVICE` : `minecraft-server`
+  - `CLUSTER` : `palworld`
+  - `SERVICE` : `palworld-server`
   - `DNSZONE` : Route 53 hosted zone ID from your checklist
-  - `SERVERNAME` : `minecraft.yourdomainname.com`
+  - `SERVERNAME` : `palworld.yourdomainname.com`
 - Environmental Variables (optional)
   - `STARTUPMIN` : Number of minutes to wait for a connection after starting before terminating (default 10)
   - `SHUTDOWNMIN` : Number of minutes to wait after the last client disconnects before terminating (default 20)
@@ -397,11 +403,11 @@ Click `Add` and then `Create` to create the task.
 
 ### Cluster
 
-Create a new "Networking Only" Cluster. Call it `minecraft`. Don't create a dedicated VPC for this, use the default or same one you already created your EFS in. Enabling Container Insights is optional but recommended for troubleshooting later, especially if you expect a lot of people to potentially connect and you want to review CPU or Memory usage.
+Create a new "Networking Only" Cluster. Call it `palworld`. Don't create a dedicated VPC for this, use the default or same one you already created your EFS in. Enabling Container Insights is optional but recommended for troubleshooting later, especially if you expect a lot of people to potentially connect and you want to review CPU or Memory usage.
 
 ### Service
 
-Within your `minecraft` cluster, create a new Service.
+Within your `palworld` cluster, create a new Service.
 
 - Configure serivce
   - Launch type: Click `Switch to capacity provider`
@@ -411,11 +417,11 @@ Within your `minecraft` cluster, create a new Service.
     - `FARGATE`: 4.9 cents per hour of use with this CPU/Memory configuration
     - `FARGATE_SPOT`: 1.49 cents per hour of use with this CPU/Memory configuration
   - Task Definition
-    - Family: `minecraft-server`
+    - Family: `palworld-server`
     - Revision: The latest version (Don't forget to update it here if you revise your task definition later)
   - Platform version: `LATEST`
-  - Cluster: `minecraft`
-  - Service name: `minecraft-server` (The service name from our checklist)
+  - Cluster: `palworld`
+  - Service name: `palworld-server` (The service name from our checklist)
   - Number of tasks: `0` (The DNS+Lambda pipeline will change this to 1 on demand)
 
 `FARGATE_SPOT` is significantly cheaper but AWS can terminate your instance at any time if they need the capacity. The watchdog is designed to intercept this termination command and shut down safely, so it's fine to use Spot to save a few pennies, at the extremely low risk of game interruption.
@@ -427,7 +433,7 @@ Click `Next step`
   - Subnets: Pick ALL of them, one at a time (must match the Subnets that EFS was created in, which by default is all of them)
   - Security Group: Click `Edit`
     - Create new security gruop
-    - Security group name: Default is fine or call it `minecraft-server`
+    - Security group name: Default is fine or call it `palworld-server`
     - Inbound rules for security group (Java edition)
       - Change `HTTP` to `Custom TCP`
       - Port range: `25565`
@@ -452,18 +458,18 @@ Go to the `Subscription filters` tab, click `Create` and then `Create Lambda sub
 
 In the `Create Lambda subscription filter` page, use the following values:
 
-- Lambda Function : `minecraft-launcher`
+- Lambda Function : `palworld-launcher`
 - Log format : `Other`
-- Subscription filter pattern: `"minecraft.yourdomainname.com"` (or just simply `minecraft` -- this is what it's looking for to fire off the lambda)
-- Subscription filter name: `minecraft`
+- Subscription filter pattern: `"palworld.yourdomainname.com"` (or just simply `palworld` -- this is what it's looking for to fire off the lambda)
+- Subscription filter name: `palworld`
 
 Click `Start streaming`.
 
 # Usage and Customization
 
-Launch your server the first time by visiting your server name in a web browser, which won't load anything but it will trigger the actions. You can watch it start up by refreshing the ECS console page within your `minecraft` cluster. Watch the `Desired tasks` change from 0 to 1, then on the `Tasks` tab select our task and refresh until both containers say `RUNNING`. You can also go to the `Logs` tab here and refresh the container logs to see the output of the initial world creation, etc.
+Launch your server the first time by visiting your server name in a web browser, which won't load anything but it will trigger the actions. You can watch it start up by refreshing the ECS console page within your `palworld` cluster. Watch the `Desired tasks` change from 0 to 1, then on the `Tasks` tab select our task and refresh until both containers say `RUNNING`. You can also go to the `Logs` tab here and refresh the container logs to see the output of the initial world creation, etc.
 
-To use your new server, open Minecraft Multiplayer, add your new server, and join. It will fail at first if the server is not started, but then everything comes online and you can join your new world! You may notice that you don't have many permissions or ability to customize a lot of things yet, so let's dig into how to edit the relevant files!
+To use your new server, open Palworld Multiplayer, add your new server, and join. It will fail at first if the server is not started, but then everything comes online and you can join your new world! You may notice that you don't have many permissions or ability to customize a lot of things yet, so let's dig into how to edit the relevant files!
 
 ## Option 1: Mount EFS Directly
 
@@ -486,7 +492,7 @@ For `Source location options`, select `Create new location` with these options:
 - Location type : `Amazon EFS file system`
 - Region : The region your EFS is in
 - EFS File System : The file system you created earlier (this is the file system itself not the access point)
-- Mount path : `/minecraft` or wherever your Access Point is pointed to
+- Mount path : `/palworld` or wherever your Access Point is pointed to
 
 Click `Next`. For `Destination location options` select `Create new location` with these options:
 
@@ -494,10 +500,10 @@ Click `Next`. For `Destination location options` select `Create new location` wi
 - Region : The region your bucket was created in
 - S3 bucket : The bucket you created earlier
 - S3 storage class : `Standard` is fine, these are really small files.
-- Folder : `/minecraft`
+- Folder : `/palworld`
 - IAM Role : Click `Autogenerate` and it will fill this in for you.
 
-Click `Next`. For `Task Name` consider something like `minecraft-efs-to-s3`. For the rest of the options, use these:
+Click `Next`. For `Task Name` consider something like `palworld-efs-to-s3`. For the rest of the options, use these:
 
 - Task execution configuration : Use all defaults
 - Data transfer configuration
@@ -536,7 +542,7 @@ Click `Next`. For `Destination location options` select `Choose an existing loca
 - Region : The region your EFS is in
 - Existing locations: The EFS location you created in the previous step
 
-Click `Next`. For `Task Name` consider something like `minecraft-s3-to-efs`. For the rest of the options, use these:
+Click `Next`. For `Task Name` consider something like `palworld-s3-to-efs`. For the rest of the options, use these:
 
 - Task execution configuration : Use all defaults
 - Data transfer configuration
@@ -553,7 +559,7 @@ Click `Next` and `Create task`.
 
 ### Usage and file editing
 
-After you've launched the minecraft server successfully once, it will create files in EFS such as `server.properties`, `ops.json`, `whitelist.json` among others. From the DataSync console, you can launch the `minecraft-efs-to-s3` task, which will copy these files from the EFS share to your S3 bucket. Then you can download these files from S3 (using the console or something like [S3 Browser]), edit them on your computer, then use the same client to upload the files back to S3. Afterward, open DataSync and launch the `minecraft-s3-to-efs` task to copy the updated files back to your EFS share. Then when you launch the server again, it will see and use the new files.
+After you've launched the palworld server successfully once, it will create files in EFS such as `server.properties`, `ops.json`, `whitelist.json` among others. From the DataSync console, you can launch the `palworld-efs-to-s3` task, which will copy these files from the EFS share to your S3 bucket. Then you can download these files from S3 (using the console or something like [S3 Browser]), edit them on your computer, then use the same client to upload the files back to S3. Afterward, open DataSync and launch the `palworld-s3-to-efs` task to copy the updated files back to your EFS share. Then when you launch the server again, it will see and use the new files.
 
 Best practice would be, any time you want to make a change to always copy the latest files from EFS to S3 first while your server is off before editing them and copying them back. Otherwise you may unintentionally regress some settings.
 
@@ -581,11 +587,11 @@ Check the execution roles, and that they have the right permissions. Check the c
 
 #### Containers won't switch to RUNNING state
 
-Check all of the above, but also ensure you're using an EFS Access Point with the specified auto-create permissions. The minecraft container will fail if it can't mount the data volume.
+Check all of the above, but also ensure you're using an EFS Access Point with the specified auto-create permissions. The palworld container will fail if it can't mount the data volume.
 
-### Can't connect to minecraft server
+### Can't connect to palworld server
 
-Refresh. Wait a minute, especially the first launch. Check ECS to see that the containers are in the RUNNING state. Open the running task, go to the logs tab, select minecraft and see if there are any errors on the logs. Did you make sure you opened the right port (25565 TCP) to the world in the task security group?? Security groups can be edited from both the VPC and the EC2 console.
+Refresh. Wait a minute, especially the first launch. Check ECS to see that the containers are in the RUNNING state. Open the running task, go to the logs tab, select palworld and see if there are any errors on the logs. Did you make sure you opened the right port (25565 TCP) to the world in the task security group?? Security groups can be edited from both the VPC and the EC2 console.
 
 ### Not getting text messages
 
@@ -601,23 +607,14 @@ Remember, the server starts with a DNS query automatically. So, if you've got bu
 
 Set up a [Billing Alert]! You can get an email if your bill exceeds a certain amount. Set it at $5 maybe?
 
-## Twilio setup / usage
-
-Open a free account at [Twilio], and load it up with $10 or so of credit. You can purchase a phone number here for a small monthly fee, and pay per use text messaging. Doing this will allow the container to send you a text message when the server is available for use.
-
 ## Suggestions, comments, concerns?
 
 Open an issue, fork the repo, send me a pull request or a message.
 
 [finding your aws account id]: https://docs.aws.amazon.com/IAM/latest/UserGuide/console_account-alias.html#FindingYourAWSId
 [default vpc]: https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html
-[minecraft java docker]: https://hub.docker.com/r/itzg/minecraft-server
-[minecraft bedrock docker]: https://hub.docker.com/r/itzg/minecraft-bedrock-server
 [aws estimate]: https://calculator.aws/#/estimate?id=61e8ef3440b68927eb0da116e18628e3081875b6
-[minecraft java docker server docs]: https://github.com/itzg/docker-minecraft-server/blob/master/README.md
-[minecraft bedrock docker server docs]: https://github.com/itzg/docker-minecraft-bedrock-server/blob/master/README.md
 [dns served from route 53]: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring.html
 [delegate zone setup]: https://stackoverflow.com/questions/47527575/aws-policy-allow-update-specific-record-in-route53-hosted-zone
 [billing alert]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/monitor_estimated_charges_with_cloudwatch.html
 [s3 browser]: https://s3browser.com
-[twilio]: https://twilio.com

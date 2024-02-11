@@ -1,5 +1,5 @@
 {
-  "name": "minecraft-ondemand",
+  "name": "palworld-ondemand",
   "version": "1.0.0",
   "bin": {
     "cdk": "bin/cdk.js"

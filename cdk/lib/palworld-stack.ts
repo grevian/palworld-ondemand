@@ -12,18 +12,23 @@ import {
   Arn,
   ArnFormat,
 } from 'aws-cdk-lib';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import * as chatbot from 'aws-cdk-lib/aws-chatbot';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 import { constants } from './constants';
 import { SSMParameterReader } from './ssm-parameter-reader';
 import { StackConfig } from './types';
-import { getMinecraftServerConfig, isDockerInstalled } from './util';
+import { getPalworldServerConfig, isDockerInstalled } from './util';
+import { DockerImageAsset, Platform } from 'aws-cdk-lib/aws-ecr-assets';
 
-interface MinecraftStackProps extends StackProps {
+interface PalworldStackProps extends StackProps {
   config: Readonly<StackConfig>;
 }
 
-export class MinecraftStack extends Stack {
-  constructor(scope: Construct, id: string, props: MinecraftStackProps) {
+export class PalworldStack extends Stack {
+  constructor(scope: Construct, id: string, props: PalworldStackProps) {
     super(scope, id, props);
 
     const { config } = props;
@@ -42,7 +47,7 @@ export class MinecraftStack extends Stack {
 
     const accessPoint = new efs.AccessPoint(this, 'AccessPoint', {
       fileSystem,
-      path: '/minecraft',
+      path: '/palworld',
       posixUser: {
         uid: '1000',
         gid: '1000',
@@ -76,7 +81,7 @@ export class MinecraftStack extends Stack {
 
     const ecsTaskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-      description: 'Minecraft ECS task role',
+      description: 'Palworld ECS task role',
     });
 
     efsReadWriteDataPolicy.attachToRole(ecsTaskRole);
@@ -111,26 +116,32 @@ export class MinecraftStack extends Stack {
       }
     );
 
-    const minecraftServerConfig = getMinecraftServerConfig(
-      config.minecraftEdition
-    );
+    const palworldServerConfig = getPalworldServerConfig();
 
-    const minecraftServerContainer = new ecs.ContainerDefinition(
+    const palworldServerContainer = new ecs.ContainerDefinition(
       this,
       'ServerContainer',
       {
         containerName: constants.MC_SERVER_CONTAINER_NAME,
-        image: ecs.ContainerImage.fromRegistry(minecraftServerConfig.image),
+        image: ecs.ContainerImage.fromRegistry(palworldServerConfig.image),
         portMappings: [
           {
-            containerPort: minecraftServerConfig.port,
-            hostPort: minecraftServerConfig.port,
-            protocol: minecraftServerConfig.protocol,
+            containerPort: palworldServerConfig.queryPort,
+            hostPort: palworldServerConfig.queryPort,
+            protocol: palworldServerConfig.protocol,
+          },
+          {
+            containerPort: palworldServerConfig.gamePort,
+            hostPort: palworldServerConfig.gamePort,
+            protocol: palworldServerConfig.protocol,
           },
         ],
-        environment: config.minecraftImageEnv,
         essential: false,
         taskDefinition,
+        environment: {
+          ADMIN_PASSWORD: config.palworld.adminPassword,
+          SERVER_PASSWORD: config.palworld.serverPassword,
+        },
         logging: config.debug
           ? new ecs.AwsLogDriver({
               logRetention: logs.RetentionDays.THREE_DAYS,
@@ -140,8 +151,8 @@ export class MinecraftStack extends Stack {
       }
     );
 
-    minecraftServerContainer.addMountPoints({
-      containerPath: '/data',
+    palworldServerContainer.addMountPoints({
+      containerPath: '/palworld/Pal/Saved',
       sourceVolume: constants.ECS_VOLUME_NAME,
       readOnly: false,
     });
@@ -151,16 +162,22 @@ export class MinecraftStack extends Stack {
       'ServiceSecurityGroup',
       {
         vpc,
-        description: 'Security group for Minecraft on-demand',
+        description: 'Security group for Palworld on-demand',
       }
     );
 
     serviceSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
-      minecraftServerConfig.ingressRulePort
+      ec2.Port.udp(palworldServerConfig.queryPort),
+      'Allow inbound traffic to Query Port'
+    );
+    serviceSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.udp(palworldServerConfig.gamePort),
+      'Allow inbound traffic to Game Port'
     );
 
-    const minecraftServerService = new ecs.FargateService(
+    const palworldServerService = new ecs.FargateService(
       this,
       'FargateService',
       {
@@ -180,12 +197,13 @@ export class MinecraftStack extends Stack {
         desiredCount: 0,
         assignPublicIp: true,
         securityGroups: [serviceSecurityGroup],
+        enableExecuteCommand: true,
       }
     );
 
     /* Allow access to EFS from Fargate service security group */
     fileSystem.connections.allowDefaultPortFrom(
-      minecraftServerService.connections
+      palworldServerService.connections
     );
 
     const hostedZoneId = new SSMParameterReader(
@@ -197,26 +215,65 @@ export class MinecraftStack extends Stack {
       }
     ).getParameterValue();
 
+
+    const launcherLambdaArn = new SSMParameterReader(
+      this,
+      'launcherLambdaArn',
+      {
+        parameterName: constants.LAUNCHER_LAMBDA_ARN_SSM_PARAMETER,
+        region: constants.DOMAIN_STACK_REGION,
+      }
+    ).getParameterValue();
+    const launcherLambda = iam.Role.fromRoleArn(
+      this,
+      'LauncherLambdaArn',
+      launcherLambdaArn
+    );
+
+    // IAMロールの作成
+    const chatbotRole = new iam.Role(this, 'ChatbotRole', {
+      assumedBy: new iam.ServicePrincipal('chatbot.amazonaws.com'),
+    });
+
+    // Lambda関数への実行権限を付与するポリシーステートメントを追加
+    chatbotRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['lambda:InvokeFunction'],
+      resources: [launcherLambdaArn],
+    }));
+
     let snsTopicArn = '';
-    /* Create SNS Topic if SNS_EMAIL is provided */
-    if (config.snsEmailAddress) {
-      const snsTopic = new sns.Topic(this, 'ServerSnsTopic', {
-        displayName: 'Minecraft Server Notifications',
-      });
+    // Add Slack Channel Configuration
+    const slackChannel = new chatbot.SlackChannelConfiguration(
+      this,
+      'PalworldServerSlackChannel',
+      {
+        slackChannelConfigurationName: config.slack.slackChannelName,
+        slackWorkspaceId: config.slack.slackWorkspaceId,
+        slackChannelId: config.slack.slackChannelId,
+        role: chatbotRole
+      }
+    );
 
-      snsTopic.grantPublish(ecsTaskRole);
+    // Define SNS Topic
+    const snsTopic = new sns.Topic(this, 'PalworldServerSnsTopic');
+    snsTopic.grantPublish(ecsTaskRole);
 
-      const emailSubscription = new sns.Subscription(
-        this,
-        'EmailSubscription',
-        {
-          protocol: sns.SubscriptionProtocol.EMAIL,
-          topic: snsTopic,
-          endpoint: config.snsEmailAddress,
-        }
-      );
-      snsTopicArn = snsTopic.topicArn;
-    }
+    // Set up the SNS Topic as the notification topic for the Slack Channel
+    slackChannel.addNotificationTopic(snsTopic);
+
+    // Set the SNS Topic ARN
+    snsTopicArn = snsTopic.topicArn;
+
+    const image = new DockerImageAsset(this, 'CDKDockerImage', {
+      directory: path.join(__dirname, '../../palworld-ecsfargate-watchdog/'),
+      platform: Platform.LINUX_AMD64,
+      // buildArgs
+      buildArgs: {
+        RCONPASSWORD: config.palworld.adminPassword,
+      },
+    });
+
+    const containerImage = ecs.ContainerImage.fromDockerImageAsset(image);
 
     const watchdogContainer = new ecs.ContainerDefinition(
       this,
@@ -224,9 +281,7 @@ export class MinecraftStack extends Stack {
       {
         containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME,
         image: isDockerInstalled()
-          ? ecs.ContainerImage.fromAsset(
-              path.resolve(__dirname, '../../minecraft-ecsfargate-watchdog/')
-            )
+          ? containerImage
           : ecs.ContainerImage.fromRegistry(
               'doctorray/minecraft-ecsfargate-watchdog'
             ),
@@ -261,8 +316,8 @@ export class MinecraftStack extends Stack {
           effect: iam.Effect.ALLOW,
           actions: ['ecs:*'],
           resources: [
-            minecraftServerService.serviceArn,
-            /* arn:aws:ecs:<region>:<account_number>:task/minecraft/* */
+            palworldServerService.serviceArn,
+            /* arn:aws:ecs:<region>:<account_number>:task/palworld/* */
             Arn.format(
               {
                 service: 'ecs',
@@ -291,7 +346,7 @@ export class MinecraftStack extends Stack {
       this,
       'launcherLambdaRoleArn',
       {
-        parameterName: constants.LAUNCHER_LAMBDA_ARN_SSM_PARAMETER,
+        parameterName: constants.LAUNCHER_LAMBDA_ROLE_ARN_SSM_PARAMETER,
         region: constants.DOMAIN_STACK_REGION,
       }
     ).getParameterValue();

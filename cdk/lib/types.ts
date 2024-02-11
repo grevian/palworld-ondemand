@@ -26,9 +26,43 @@ interface TwilioConfig {
   authCode: string;
 }
 
-export type MinecraftImageEnv = Record<string, string>;
+interface SlackConfig {
+  /**
+   * The name of the Slack channel to send notifications to
+   * 
+   * @default "Palworld"
+   */
+  slackChannelName: string;
+  /**
+   * **Required**. The ID of the Slack workspace
+   * 
+   * @example "T01B2AB3C"
+   */
+  slackWorkspaceId: string;
+  /**
+   * **Required**.  The ID of the Slack channel
+   * 
+   * @example "C01B2AB3C"
+   */
+  slackChannelId: string;
+}
 
-export type MinecraftEdition = 'java' | 'bedrock';
+interface PalworldConfig {
+  /**
+   * The password for the RCON connection
+   * 
+   * @example "PASSWORD for RCON"
+   */
+  adminPassword: string;
+  /**
+   * **Required**. The password for the Palworld server
+   * 
+   * @example "worldofpal"
+   */
+  serverPassword: string;
+}
+
+export type PalworldImageEnv = Record<string, string>;
 
 export interface StackConfig {
   /**
@@ -41,7 +75,7 @@ export interface StackConfig {
    * (minecraft.example.com) and an NS record on your existing (example.com)
    * hosted zone. This subdomain should not already be in use.
    *
-   * @default "minecraft"
+   * @default "palworld"
    */
   subdomainPart: string;
   /**
@@ -50,13 +84,6 @@ export interface StackConfig {
    * @default "us-east-1"
    */
   serverRegion: string;
-  /**
-   * Edition of Minecraft server to run. Accepted values are are `java` or `bedrock` for [Minecraft Java Docker] or
-   * [Minecraft Bedrock Docker], respectively.
-   *
-   * @default "java"
-   */
-  minecraftEdition: MinecraftEdition;
   /**
    * Number of minutes to wait for a connection after starting before terminating (optional, default 10)
    *
@@ -129,14 +156,8 @@ export interface StackConfig {
    */
   snsEmailAddress: string;
   twilio: TwilioConfig;
-  /**
-   * Additional environment variables to be passed to the
-   * [Minecraft Docker Server](https://github.com/itzg/docker-minecraft-server/blob/master/README.md)
-   * [Minecraft Bedrock Docker](https://github.com/itzg/docker-minecraft-bedrock-server/blob/master/README.md)
-   *
-   * @default '{ "EULA": "TRUE" }'
-   */
-  minecraftImageEnv: MinecraftImageEnv;
+  slack: SlackConfig;
+  palworld: PalworldConfig;
   /**
    * Setting to `true` enables debug mode.
    *
@@ -147,7 +168,7 @@ export interface StackConfig {
   debug: boolean;
 }
 
-export interface MinecraftEditionConfig {
+export interface PalworldEditionConfig {
   /**
    * Name of the docker image to pull for the Minecraft server
    *
@@ -157,7 +178,11 @@ export interface MinecraftEditionConfig {
   /**
    * Port number to run the Minecraft server on
    */
-  port: number;
+  queryPort: number;
+  /**
+   * Port number to run the Minecraft server on
+   */
+  gamePort: number;
   /**
    * Protocol for the Minecraft server
    */
@@ -165,5 +190,6 @@ export interface MinecraftEditionConfig {
   /**
    * The ingress rule port to be used for the service security group
    */
-  ingressRulePort: Port;
+  ingressRuleQueryPort: Port;
+  ingressRuleGamePort: Port;
 }

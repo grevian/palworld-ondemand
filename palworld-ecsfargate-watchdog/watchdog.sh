@@ -19,10 +19,16 @@ function send_notification ()
   echo "Twilio information set, sending $1 message" && \
   curl --silent -XPOST -d "Body=$MESSAGETEXT" -d "From=$TWILIOFROM" -d "To=$TWILIOTO" "https://api.twilio.com/2010-04-01/Accounts/$TWILIOAID/Messages" -u "$TWILIOAID:$TWILIOAUTH"
 
+  # ## SNS Option
+  # [ -n "$SNSTOPIC" ] && \
+  # echo "SNS topic set, sending $1 message" && \
+  # aws sns publish --topic-arn "$SNSTOPIC" --message "$MESSAGETEXT"
+
   ## SNS Option
   [ -n "$SNSTOPIC" ] && \
   echo "SNS topic set, sending $1 message" && \
-  aws sns publish --topic-arn "$SNSTOPIC" --message "$MESSAGETEXT"
+  printf -v sns_message '{"version": "1.0","source": "custom","content": {"description": ":information_source: %s"}}' "$MESSAGETEXT" && \
+  aws sns publish --topic-arn "$SNSTOPIC" --message "$sns_message"
 }
 
 function zero_service ()
@@ -56,9 +62,9 @@ echo "I believe our public IP address is $PUBLICIP"
 ## update public dns record
 echo "Updating DNS record for $SERVERNAME to $PUBLICIP"
 ## prepare json file
-cat << EOF >> minecraft-dns.json
+cat << EOF > palworld-dns.json
 {
-  "Comment": "Fargate Public IP change for Minecraft Server",
+  "Comment": "Fargate Public IP change for Palworld Server",
   "Changes": [
     {
       "Action": "UPSERT",
@@ -76,64 +82,52 @@ cat << EOF >> minecraft-dns.json
   ]
 }
 EOF
-aws route53 change-resource-record-sets --hosted-zone-id $DNSZONE --change-batch file://minecraft-dns.json
+aws route53 change-resource-record-sets --hosted-zone-id $DNSZONE --change-batch file://palworld-dns.json
 
-## detemine java or bedrock based on listening port
-echo "Determining Minecraft edition based on listening port..."
-echo "If we are stuck here, the minecraft container probably failed to start.  Waiting 10 minutes just in case..."
+# Wait for Palworld server to start
+echo "Determining Palworld based on listening port..."
+echo "If we are stuck here, the palworld container probably failed to start.  Waiting 10 minutes just in case..."
 COUNTER=0
 while true
 do
-  netstat -atn | grep :25565 | grep LISTEN && EDITION="java" && break
-  netstat -aun | grep :19132 && EDITION="bedrock" && break
+  netstat -aun | grep :8211 && break
+  netstat -aun | grep :27015 && break
   sleep 1
   COUNTER=$(($COUNTER + 1))
-  if [ $COUNTER -gt 600 ] ## server has not been detected as starting within 10 minutes
+  if [ $COUNTER -gt 600 ] ## 10 minutes
   then
-    echo 10 minutes elapsed without a minecraft server listening, terminating.
+    echo "10 minutes elapsed without a palworld server listening, terminating."
     zero_service
   fi
 done
-echo "Detected $EDITION edition"
+echo "Detected Palworld"
 
-if [ "$EDITION" == "java" ]
-then
-  echo "Waiting for Minecraft RCON to begin listening for connections..."
-  STARTED=0
-  while [ $STARTED -lt 1 ]
-  do
-    CONNECTIONS=$(netstat -atn | grep :25575 | grep LISTEN | wc -l)
-    STARTED=$(($STARTED + $CONNECTIONS))
-    if [ $STARTED -gt 0 ] ## minecraft actively listening, break out of loop
-    then
-      echo "RCON is listening, we are ready for clients."
-      break
-    fi
-    sleep 1
-  done
-fi
-
-if [ "$EDITION" == "bedrock" ]
-then
-  PINGA="\x01" ## uncommitted ping
-  PINGB="\x00\x00\x00\x00\x00\x00\x4e\x20" ## time since start in ms.  20 seconds sounds good
-  PINGC="\x00\xff\xff\x00\xfe\xfe\xfe\xfe\xfd\xfd\xfd\xfd\x12\x34\x56\x78" ## offline message data id
-  PINGD=$(for i in $(seq 1 8); do echo -en "\x5c\x78" ; tr -dc 'a-f0-9' < /dev/urandom | head -c2; done) ## random client guid
-  BEDROCKPING=$PINGA$PINGB$PINGC$PINGD
-  echo "Bedrock ping string is $BEDROCKPING"
-fi
+## Check for RCON port
+echo "Waiting for Palworld RCON to begin listening for connections..."
+STARTED=0
+while [ $STARTED -lt 1 ]
+do
+  CONNECTIONS=$(netstat -atn | grep :25575 | wc -l)
+  STARTED=$(($STARTED + $CONNECTIONS))
+  if [ $STARTED -gt 0 ]
+  then
+    echo "RCON is listening, we are ready for clients."
+    break
+  fi
+  sleep 1
+done
 
 ## Send startup notification message
 send_notification startup
 
-echo "Checking every 1 minute for active connections to Minecraft, up to $STARTUPMIN minutes..."
+# Begin monitoring for active connections
+echo "Checking every 1 minute for active connections to Palworld, up to $STARTUPMIN minutes..."
 COUNTER=0
 CONNECTED=0
 while [ $CONNECTED -lt 1 ]
 do
   echo Waiting for connection, minute $COUNTER out of $STARTUPMIN...
-  [ "$EDITION" == "java" ] && CONNECTIONS=$(netstat -atn | grep :25565 | grep ESTABLISHED | wc -l)
-  [ "$EDITION" == "bedrock" ] && CONNECTIONS=$((echo -en "$BEDROCKPING" && sleep 1) | ncat -w 1 -u 127.0.0.1 19132 | cut -c34- | awk -F\; '{ print $5 }')
+  CONNECTIONS=$(rcon ShowPlayers | grep -v '^name,' | wc -l)
   [ -n "$CONNECTIONS" ] || CONNECTIONS=0
   CONNECTED=$(($CONNECTED + $CONNECTIONS))
   COUNTER=$(($COUNTER + 1))
@@ -154,18 +148,17 @@ echo "We believe a connection has been made, switching to shutdown watcher."
 COUNTER=0
 while [ $COUNTER -le $SHUTDOWNMIN ]
 do
-  [ "$EDITION" == "java" ] && CONNECTIONS=$(netstat -atn | grep :25565 | grep ESTABLISHED | wc -l)
-  [ "$EDITION" == "bedrock" ] && CONNECTIONS=$((echo -en "$BEDROCKPING" && sleep 1) | ncat -w 1 -u 127.0.0.1 19132 | cut -c34- | awk -F\; '{ print $5 }')
+  CONNECTIONS=$(rcon ShowPlayers | grep -v '^name,' | wc -l)
   [ -n "$CONNECTIONS" ] || CONNECTIONS=0
   if [ $CONNECTIONS -lt 1 ]
   then
     echo "No active connections detected, $COUNTER out of $SHUTDOWNMIN minutes..."
     COUNTER=$(($COUNTER + 1))
   else
-    [ $COUNTER -gt 0 ] && echo "New connections active, zeroing counter."
+    echo "Active connections detected, resetting shutdown counter."
     COUNTER=0
   fi
-  for i in $(seq 1 59) ; do sleep 1; done
+  sleep 59
 done
 
 echo "$SHUTDOWNMIN minutes elapsed without a connection, terminating."

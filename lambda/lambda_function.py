@@ -31,5 +31,7 @@ def lambda_handler(event, context):
             desiredCount=1,
         )
         print("Updated desiredCount to 1")
+        return f"Updated desiredCount to 1 for {SERVICE}"
     else:
         print("desiredCount already at 1")
+        return f"desiredCount already at 1 for {SERVICE}"

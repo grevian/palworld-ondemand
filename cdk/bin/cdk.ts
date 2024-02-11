@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { MinecraftStack } from '../lib/minecraft-stack';
+import { PalworldStack } from '../lib/palworld-stack';
 import { DomainStack } from '../lib/domain-stack';
 import { constants } from '../lib/constants';
 import { resolveConfig } from '../lib/config';
@@ -15,7 +15,7 @@ if (!config.domainName) {
     `.env.sample` to `.env` and add your domain name.');
 }
 
-const domainStack = new DomainStack(app, 'minecraft-domain-stack', {
+const domainStack = new DomainStack(app, 'palworld-domain-stack', {
   env: {
     /**
      * Because we are relying on Route 53+CloudWatch to invoke the Lambda function,
@@ -28,7 +28,7 @@ const domainStack = new DomainStack(app, 'minecraft-domain-stack', {
   config,
 });
 
-const minecraftStack = new MinecraftStack(app, 'minecraft-server-stack', {
+const palworldStack = new PalworldStack(app, 'palworld-server-stack', {
   env: {
     region: config.serverRegion,
     /* Account must be specified to allow for VPC lookup */
@@ -37,4 +37,4 @@ const minecraftStack = new MinecraftStack(app, 'minecraft-server-stack', {
   config,
 });
 
-minecraftStack.addDependency(domainStack);
+palworldStack.addDependency(domainStack);
