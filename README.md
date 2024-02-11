@@ -6,28 +6,61 @@ Almost free serverless on-demand Palworld Dedicated Server in AWS
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
-- [Background](#background)
-- [Workflow](#workflow)
-- [Diagram](#diagram)
-- [Requirements](#requirements)
-- [Cost Breakdown](#cost-breakdown)
+- [palworld-ondemand](#palworld-ondemand)
+- [🚧 **Under construction**: This section is still in progress. Stay tuned for updates.](#-under-construction-this-section-is-still-in-progress-stay-tuned-for-updates)
+  - [Table of Contents](#table-of-contents)
+  - [Quick Start](#quick-start)
+  - [Background](#background)
+  - [Workflow](#workflow)
+  - [Diagram](#diagram)
+  - [Requirements](#requirements)
+  - [Cost Breakdown](#cost-breakdown)
 - [Installation and Setup](#installation-and-setup)
   - [Checklist of things to keep track of](#checklist-of-things-to-keep-track-of)
   - [Region Selection](#region-selection)
   - [VPC](#vpc)
   - [Elastic File System](#elastic-file-system)
+    - [Creating the EFS](#creating-the-efs)
+    - [Allow access to EFS from within the VPC](#allow-access-to-efs-from-within-the-vpc)
   - [Lambda](#lambda)
   - [Route 53](#route-53)
+    - [Server DNS Record](#server-dns-record)
+    - [Query Logging](#query-logging)
   - [Optional SNS Notifications](#optional-sns-notifications)
   - [IAM](#iam)
+    - [Policies](#policies)
+      - [EFS Policy](#efs-policy)
+      - [ECS Policy](#ecs-policy)
+      - [Route 53 Policy](#route-53-policy)
+      - [SNS policy (optional)](#sns-policy-optional)
+    - [Roles](#roles)
+      - [ECS Role](#ecs-role)
+      - [Lambda Role](#lambda-role)
   - [Elastic Container Service](#elastic-container-service)
+    - [Task Definition](#task-definition)
+    - [Cluster](#cluster)
+    - [Service](#service)
   - [CloudWatch](#cloudwatch)
 - [Usage and Customization](#usage-and-customization)
   - [Option 1: Mount EFS Directly](#option-1-mount-efs-directly)
   - [Option 2: DataSync and S3](#option-2-datasync-and-s3)
+    - [Step 1: Create an S3 bucket](#step-1-create-an-s3-bucket)
+    - [Step 2: Create an EFS -\> S3 DataSync Task](#step-2-create-an-efs---s3-datasync-task)
+    - [Step 3: Create an S3 -\> EFS DataSync Task](#step-3-create-an-s3---efs-datasync-task)
+    - [Usage and file editing](#usage-and-file-editing)
 - [Testing and Troubleshooting](#testing-and-troubleshooting)
+  - [Areas of concern, what to watch](#areas-of-concern-what-to-watch)
+    - [CloudWatch](#cloudwatch-1)
+    - [Lambda](#lambda-1)
+    - [Elastic Container Service](#elastic-container-service-1)
+      - [Service won't launch task](#service-wont-launch-task)
+      - [Containers won't switch to RUNNING state](#containers-wont-switch-to-running-state)
+    - [Can't connect to palworld server](#cant-connect-to-palworld-server)
+    - [Not getting text messages](#not-getting-text-messages)
+  - [Server starts randomly?](#server-starts-randomly)
 - [Other Stuff](#other-stuff)
+  - [Concerned about cost overruns?](#concerned-about-cost-overruns)
+  - [Suggestions, comments, concerns?](#suggestions-comments-concerns)
 
 ## Quick Start
 Too much text for you?  Click the `cdk` folder in the source above for a fast and relatively-automated walkthrough.
@@ -60,7 +93,7 @@ The process works as follows:
 - AWS Account
 - Domain name with public [DNS served from Route 53]. Does not need to be registered through Route 53.
 - Palworld client
-- Use of the excellent thijsvanloef/palworld-server-docker server image (used within task definition, no direct download required)
+- AWS Chatbot already integrated with Slack
 
 ## Cost Breakdown
 
