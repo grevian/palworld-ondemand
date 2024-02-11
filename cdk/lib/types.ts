@@ -154,7 +154,7 @@ export interface StackConfig {
    * If this value is specified, an SNS topic is created and you will receive
    * email notifications each time the minecraft server is launched and ready.
    */
-  snsEmailAddress: string;
+  //snsEmailAddress: string;
   twilio: TwilioConfig;
   slack: SlackConfig;
   palworld: PalworldConfig;

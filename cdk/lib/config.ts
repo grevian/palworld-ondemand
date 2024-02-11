@@ -15,7 +15,7 @@ export const resolveConfig = (): StackConfig => ({
   taskCpu: +(process.env.TASK_CPU || 1024),
   taskMemory: +(process.env.TASK_MEMORY || 2048),
   vpcId: process.env.VPC_ID || '',
-  snsEmailAddress: process.env.SNS_EMAIL_ADDRESS || '',
+  //snsEmailAddress: process.env.SNS_EMAIL_ADDRESS || '',
   twilio: {
     phoneFrom: process.env.TWILIO_PHONE_FROM || '',
     phoneTo: process.env.TWILIO_PHONE_TO || '',
