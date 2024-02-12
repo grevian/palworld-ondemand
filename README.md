@@ -123,6 +123,10 @@ npm run build && npm run deploy
 ### 4. Set Slack Alias
 Create an alias command in Slack. For "--function-name", enter a Function name named "...LauncherLambda..." set to us-east-1. "--region" is fixed at us-east-1.
 
+```
+@aws alias create palworld lambda invoke --function-name palworld-domain-stack-LauncherLambda56F011B7-DDFHHDNH8f3 --region us-east-1 --payload {}
+```
+
 ![slack alias](docs/slackalias.png)
 
 ### 5. Run palworld
