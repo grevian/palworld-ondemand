@@ -69,16 +69,19 @@ Almost free serverless on-demand Palworld Dedicated Server in AWS
 
 ### 1. Route53
 The domain must have been acquired (not necessarily AWS) and the host zone must have been created with Route53.
+
 ![route53](docs/route53.png)
 
 ### 2. AWS Chatbot
 
 ![chatbot](docs/chatbot.png)
+
 AWS Chatbot must be fully integrated with existing Slack.
 [Get started with Slack]
 
 ### 3. Configuration and Deployment
 Deployment can be done using AWS CloudShell only.
+
 ![cloudshell](docs/cloudshell.png)
 
 Below is the operation with AWS CloudShell
