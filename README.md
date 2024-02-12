@@ -144,6 +144,11 @@ Enter command in Slack
 @aws run palworld
 ```
 
+You will get a response from Slack, press "[Run] command".
+
+![run palworld](docs/runpalworld.png)
+
+
 After a few minutes, you will see a message in Slack that the startup is complete and you can connect.
 
 ```
