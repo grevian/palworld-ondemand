@@ -264,27 +264,30 @@ export class PalworldStack extends Stack {
     // Set the SNS Topic ARN
     snsTopicArn = snsTopic.topicArn;
 
-    const image = new DockerImageAsset(this, 'CDKDockerImage', {
-      directory: path.join(__dirname, '../../palworld-ecsfargate-watchdog/'),
-      platform: Platform.LINUX_AMD64,
-      // buildArgs
-      buildArgs: {
-        RCONPASSWORD: config.palworld.adminPassword,
-      },
-    });
+    // const image = new DockerImageAsset(this, 'CDKDockerImage', {
+    //   directory: path.join(__dirname, '../../palworld-ecsfargate-watchdog/'),
+    //   platform: Platform.LINUX_AMD64,
+    //   // buildArgs
+    //   buildArgs: {
+    //     RCONPASSWORD: config.palworld.adminPassword,
+    //   },
+    // });
 
-    const containerImage = ecs.ContainerImage.fromDockerImageAsset(image);
+    //const containerImage = ecs.ContainerImage.fromDockerImageAsset(image);
 
     const watchdogContainer = new ecs.ContainerDefinition(
       this,
       'WatchDogContainer',
       {
         containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME,
-        image: isDockerInstalled()
-          ? containerImage
-          : ecs.ContainerImage.fromRegistry(
-              'doctorray/minecraft-ecsfargate-watchdog'
-            ),
+        // image: isDockerInstalled()
+        //   ? containerImage
+        //   : ecs.ContainerImage.fromRegistry(
+        //       'doctorray/minecraft-ecsfargate-watchdog'
+        //     ),
+        image: ecs.ContainerImage.fromRegistry(
+          'coni524/palworld-ecsfargate-watchdog'
+        ),
         essential: true,
         taskDefinition: taskDefinition,
         environment: {
@@ -299,6 +302,7 @@ export class PalworldStack extends Stack {
           TWILIOAUTH: config.twilio.authCode,
           STARTUPMIN: config.startupMinutes,
           SHUTDOWNMIN: config.shutdownMinutes,
+          RCONPASSWORD: config.palworld.adminPassword,
         },
         logging: config.debug
           ? new ecs.AwsLogDriver({

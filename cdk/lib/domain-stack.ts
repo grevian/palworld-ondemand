@@ -138,10 +138,10 @@ export class DomainStack extends Stack {
      * Create our log subscription filter to catch any log events containing
      * our subdomain name and send them to our launcher lambda.
      */
-    queryLogGroup.addSubscriptionFilter('SubscriptionFilter', {
-      destination: new logDestinations.LambdaDestination(launcherLambda),
-      filterPattern: logs.FilterPattern.anyTerm(subdomain),
-    });
+    // queryLogGroup.addSubscriptionFilter('SubscriptionFilter', {
+    //   destination: new logDestinations.LambdaDestination(launcherLambda),
+    //   filterPattern: logs.FilterPattern.anyTerm(subdomain),
+    // });
 
     /**
      * Add the subdomain hosted zone ID to SSM since we cannot consume a cross-stack

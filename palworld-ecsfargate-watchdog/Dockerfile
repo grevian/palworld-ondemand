@@ -12,7 +12,6 @@ ENV GO111MODULE on
 
 # Set environment variables for the RCON client
 ENV RCONPORT=25575
-ARG RCONPASSWORD
 
 # Set the working directory in the container
 WORKDIR /app
@@ -34,9 +33,6 @@ RUN wget "https://github.com/gorcon/rcon-cli/releases/download/v${RCON_VERSION}/
     chmod +x /usr/local/bin/rcon && \
     rm -rf /tmp/rcon.tar.gz && \
     rm -rf "/tmp/rcon-${RCON_VERSION}-amd64_linux"
-
-# Create the `rcon.yaml` file with the RCON server address and password
-RUN printf "default:\n  address: \"localhost:%s\"\n  password: \"%s\"\n" "$RCONPORT" "${RCONPASSWORD}" > /app/rcon.yaml
 
 # Copy the `watchdog.sh` script to the container and make it executable
 COPY ./watchdog.sh .

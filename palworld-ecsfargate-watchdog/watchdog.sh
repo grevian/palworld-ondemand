@@ -8,6 +8,10 @@
 [ -n "$DNSZONE" ] || { echo "DNSZONE env variable must be set to the Route53 Hosted Zone ID" ; exit 1; }
 [ -n "$STARTUPMIN" ] || { echo "STARTUPMIN env variable not set, defaulting to a 10 minute startup wait" ; STARTUPMIN=10; }
 [ -n "$SHUTDOWNMIN" ] || { echo "SHUTDOWNMIN env variable not set, defaulting to a 20 minute shutdown wait" ; SHUTDOWNMIN=20; }
+[ -n "$RCONPASSWORD" ] || { echo "The RCONPASSWORD environment variable must be set to AdminPassword." ; exit 1; }
+
+# Create RCON yaml
+printf "default:\n  address: \"localhost:%s\"\n  password: \"%s\"\n" "$RCONPORT" "$RCONPASSWORD" > /app/rcon.yaml
 
 function send_notification ()
 {

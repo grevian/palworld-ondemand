@@ -2,14 +2,17 @@
 
 Almost free serverless on-demand Palworld Dedicated Server in AWS
 
-# 🚧 **Under construction**: This section is still in progress. Stay tuned for updates.
-
 ## Table of Contents
 
 - [palworld-ondemand](#palworld-ondemand)
-- [🚧 **Under construction**: This section is still in progress. Stay tuned for updates.](#-under-construction-this-section-is-still-in-progress-stay-tuned-for-updates)
   - [Table of Contents](#table-of-contents)
   - [Quick Start](#quick-start)
+    - [1. Route53](#1-route53)
+    - [2. AWS Chatbot](#2-aws-chatbot)
+    - [3. Configuration and Deployment](#3-configuration-and-deployment)
+    - [4. Set Slack Alias](#4-set-slack-alias)
+    - [5. Run palworld](#5-run-palworld)
+- [🚧 The following documentation is not yet complete.](#-the-following-documentation-is-not-yet-complete)
   - [Background](#background)
   - [Workflow](#workflow)
   - [Diagram](#diagram)
@@ -63,7 +66,87 @@ Almost free serverless on-demand Palworld Dedicated Server in AWS
   - [Suggestions, comments, concerns?](#suggestions-comments-concerns)
 
 ## Quick Start
-Too much text for you?  Click the `cdk` folder in the source above for a fast and relatively-automated walkthrough.
+
+### 1. Route53
+The domain must have been acquired (not necessarily AWS) and the host zone must have been created with Route53.
+![route53](docs/route53.png)
+
+### 2. AWS Chatbot
+
+![chatbot](docs/chatbot.png)
+AWS Chatbot must be fully integrated with existing Slack.
+[Get started with Slack]
+
+### 3. Configuration and Deployment
+Deployment can be done using AWS CloudShell only.
+![cloudshell](docs/cloudshell.png)
+
+Below is the operation with AWS CloudShell
+
+Git Clone
+```
+git clone https://github.com/coni524/palworld-ondemand.git
+```
+
+Edit .env
+```
+cd palworld-ondemand/cdk/
+cp -p .env.sample .env
+vi .env
+```
+
+**Required field**
+
+- **DOMAIN_NAME**: Domain name 
+- **SLACK_WORKSPACE_ID** : AWS Chatbot Workspace ID 
+- **SLACK_CHANNEL_ID**: Slack Channel ID, You can refer to it in the View Channel defails of the Slack channel
+- **ADMIN_PASSWORD**: RCON Password, Used only inside the container for connection user checks.
+- **SERVER_PASSWORD**: Palworld Password, Password required for client connection to Palworld
+- **SERVER_REGION**: Region in which to start Palworld Dedicated Server (e.g.choose a region close to you)
+
+**Example .env**
+```
+# Required
+DOMAIN_NAME                   = example.net
+SLACK_WORKSPACE_ID            = T07RLAJDF
+SLACK_CHANNEL_ID              = C06J8SWSKDJ
+ADMIN_PASSWORD                = worldofpalrcon
+SERVER_PASSWORD               = worldofpal
+SERVER_REGION                 = ap-northeast-1
+```
+
+Build & Deploy
+```
+npm run build && npm run deploy
+```
+
+### 4. Set Slack Alias
+Create an alias command in Slack. For "--function-name", enter a Function name named "...LauncherLambda..." set to us-east-1. "--region" is fixed at us-east-1.
+
+![slack alias](docs/slackalias.png)
+
+### 5. Run palworld
+
+Enter command in Slack
+
+```
+@aws run palworld
+```
+
+After a few minutes, you will see a message in Slack that the startup is complete and you can connect.
+
+```
+e.g. 
+palworld.example.net:8211
+password: worldofpal
+```
+
+- The system automatically stops when there is no connection from a client for 10 minutes immediately after startup.
+- After a client connection, the system automatically stops when it detects no connected users for 20 minutes.
+
+
+
+# 🚧 The following documentation is not yet complete.
 
 ## Background
 
@@ -643,6 +726,9 @@ Set up a [Billing Alert]! You can get an email if your bill exceeds a certain am
 ## Suggestions, comments, concerns?
 
 Open an issue, fork the repo, send me a pull request or a message.
+
+[Get started with Slack]: https://docs.aws.amazon.com/chatbot/latest/adminguide/slack-setup.html
+
 
 [finding your aws account id]: https://docs.aws.amazon.com/IAM/latest/UserGuide/console_account-alias.html#FindingYourAWSId
 [default vpc]: https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html
