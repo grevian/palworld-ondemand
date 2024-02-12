@@ -121,6 +121,13 @@ npm run build && npm run deploy
 ```
 
 ### 4. Set Slack Alias
+
+Invite @aws to join our Slack Channel.
+
+```
+/invite @aws
+```
+
 Create an alias command in Slack. For "--function-name", enter a Function name named "...LauncherLambda..." set to us-east-1. "--region" is fixed at us-east-1.
 
 ```
