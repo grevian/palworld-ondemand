@@ -13,16 +13,15 @@
     "diff": "npx aws-cdk diff"
   },
   "devDependencies": {
-    "@types/jest": "^26.0.10",
-    "@types/node": "10.17.27",
-    "dotenv": "^10.0.0",
-    "ts-node": "^9.0.0",
-    "typescript": "~3.9.7"
+    "@types/jest": "^29.5.12",
+    "@types/node": "20.11.17",
+    "dotenv": "^16.4.3",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.3.3"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.89.0",
-    "constructs": "^10.0.0",
-    "execa": "^5.1.1",
-    "source-map-support": "^0.5.16"
+    "aws-cdk-lib": "^2.127.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
   }
 }
