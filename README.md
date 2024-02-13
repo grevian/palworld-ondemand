@@ -6,18 +6,17 @@ Almost free serverless on-demand Palworld Dedicated Server in AWS
 
 - [palworld-ondemand](#palworld-ondemand)
   - [Table of Contents](#table-of-contents)
+  - [Requirements](#requirements)
+  - [Diagram](#diagram)
+  - [Cost Breakdown](#cost-breakdown)
   - [Quick Start](#quick-start)
     - [1. Route53](#1-route53)
     - [2. AWS Chatbot](#2-aws-chatbot)
     - [3. Configuration and Deployment](#3-configuration-and-deployment)
     - [4. Set Slack Alias](#4-set-slack-alias)
     - [5. Run palworld](#5-run-palworld)
-- [🚧 The following documentation is not yet complete.](#-the-following-documentation-is-not-yet-complete)
   - [Background](#background)
   - [Workflow](#workflow)
-  - [Diagram](#diagram)
-  - [Requirements](#requirements)
-  - [Cost Breakdown](#cost-breakdown)
 - [Installation and Setup](#installation-and-setup)
   - [Checklist of things to keep track of](#checklist-of-things-to-keep-track-of)
   - [Region Selection](#region-selection)
@@ -64,6 +63,29 @@ Almost free serverless on-demand Palworld Dedicated Server in AWS
 - [Other Stuff](#other-stuff)
   - [Concerned about cost overruns?](#concerned-about-cost-overruns)
   - [Suggestions, comments, concerns?](#suggestions-comments-concerns)
+
+
+## Requirements
+
+- AWS Account
+- A domain name with a public DNS provided by Route 53; there is no need to register the domain through Route 53.
+- The creation of a Route53 zone must be completed for the domain name you own. [DNS served from Route 53].
+- Palworld client
+- AWS Chatbot already integrated with Slack. [Get started with Slack]
+
+## Diagram
+
+![Basic Workflow](docs/diagrams/aws_architecture.drawio.png)
+
+## Cost Breakdown
+
+- Link to [AWS Estimate] assuming 20 hours a month usage.
+
+- tl;dr:
+   - $0.50 per month for DNS zones, $0.29072 per hour for Fargate usage with 4 vCPU and 16GB memory. All other costs negligible, a couple of pennies per month at most.
+
+- tl;dr;tl;dt:
+   - Approximately $5.81 / month for 20 hours of usage with 4 vCPU and 16GB memory configuration, plus $0.50 for DNS zones, totaling nearly $6.31 / month.
 
 ## Quick Start
 
@@ -163,49 +185,20 @@ password: worldofpal
 - The system automatically stops when there is no connection from a client for 10 minutes immediately after startup.
 - After a client connection, the system automatically stops when it detects no connected users for 20 minutes.
 
-
-
-# 🚧 The following documentation is not yet complete.
-
 ## Background
 
-Instead of paying a palworld hosting service for a private server for you and your friends, host it yourself. By utilizing several AWS services, a palworld server can automatically start when you're ready to use it, and shut down when you are done. The final cost will depend on use but can be very minimal. The cost estimate breakdown is below.
-
-This is a reasonably cost-effective solution for someone that doesn't need their server running 24/7. If that's you, read
+By using multiple AWS services, PALWORLD's servers automatically start up when they are ready for use and automatically shut down when they are finished.
 
 ## Workflow
 
 The process works as follows:
 
-1. Open Palworld Multiplayer, let it look for our server, it will time out.
-2. The DNS lookup query is logged in **Route 53** on our public hosted zone.
-3. **CloudWatch** forwards the query to a **Lambda** function.
-4. The **Lambda** function modifies an existing **ECS Fargate** service to a desired task count of **1**.
-5. **Fargate** launches two containers, **Palworld** and a watchdog, which updates the DNS record to the new IP.
-6. The watchdog sends a notification through **Slack** when the server is ready. Additionally, you can initiate the server start command directly from Slack.
-7. Refresh **Palworld** server list, server is ready to connect.
-8. After 10 minutes without a connection or 20 minutes after the last client disconnects (customizable), the watchdog sets the desired task count to **zero** and shuts down, sending a shutdown notification through Slack.
-
-## Diagram
-
-![Basic Workflow](docs/diagrams/aws_architecture.drawio.png)
-
-## Requirements
-
-- AWS Account
-- Domain name with public [DNS served from Route 53]. Does not need to be registered through Route 53.
-- Palworld client
-- AWS Chatbot already integrated with Slack
-
-## Cost Breakdown
-
-- Link to [AWS Estimate] assuming 20 hours a month usage.
-
-- tl;dr:
-   - $0.50 per month for DNS zones, $0.29072 per hour for Fargate usage with 4 vCPU and 16GB memory. All other costs negligible, a couple of pennies per month at most.
-
-- tl;dr;tl;dt:
-   - Approximately $5.81 / month for 20 hours of usage with 4 vCPU and 16GB memory configuration, plus $0.50 for DNS zones, totaling nearly $6.31 / month.
+1. run the command to start Palworld from Slack
+2. a **Lambda** function running via **AWS Chatbot** changes the existing **ECS Fargate** service to the desired task count of **1**.
+3. **Fargate** starts two containers, **Palworld** and a watchdog, and updates the DNS records to the new IP.
+4. watchdog sends a notification via **Slack** when the server is ready.
+5. update the server list in **Palworld** and the server will be ready for connection
+6. after 10 minutes without a connection or after 20 minutes since the last client disconnected (customizable), the watchdog will set the desired task count to **zero**, shut down, and send a shutdown notification via Slack.
 
 # Installation and Setup
 
@@ -217,7 +210,7 @@ To simplify the procedure, your ECS cluster name, service name, and sns topic na
 
 - Cluster name : `palworld`
 - Service name : `palworld-server`
-- SNS Topic : `palworld-notifications`
+- SNS Topic : `palworld-server-stack....`
 
 Things you need to go find because they'll be used in the procedure are:
 
@@ -306,8 +299,10 @@ def lambda_handler(event, context):
             desiredCount=1,
         )
         print("Updated desiredCount to 1")
+        return f"Updated desiredCount to 1 for {SERVICE}" # to Slack response.
     else:
         print("desiredCount already at 1")
+        return f"desiredCount already at 1 for {SERVICE}" # to Slack response.
 ```
 
 This file is also in this repository in the `lambda` folder. Change the region, cluster, or service on lines 3-5 if needed. Then, click the `Deploy` button. Switch back to your server region now so that we don't create anything in the wrong region later.
@@ -324,11 +319,15 @@ Add an A record with a 30 second TTL with a unique name that you will use to con
 
 ### Query Logging
 
+🚧 In this project, starting from Route53 is disabled. (Commented out)
+
 The magic that allows the on-demand idea to work without any "always on" infrastructure comes in here, with Query logging. Every time someone looks up a DNS record for your domain, it will hit Route 53 as the authoritative DNS server. These queries can be logged and actions performed from them.
 
 From your hosted zone, click `Configure query logging` on the top right. Then, click `Grant Permission` so that it will apply appropriate policies for queries to be logged. Finally, in `Log group` select `Create log group` and use the suggested name with your domain name in the string, `/aws/route53/yourdomainname.com` and click `Create`.
 
 ## Optional SNS Notifications
+
+🚧 In this project, SNS Email notifications are changed to Slack notifications.
 
 You can receive a text or email or anything else you want to consume via Amazon SNS, if Twilio isn't your thing. This also allows this to be a 100% AWS solution.
 
@@ -483,20 +482,22 @@ Create a new Task Definition of `FARGATE` launch type. In the configuration wiza
 - Task Role: `ecs.task.palworld-server`
 - Network Mode: `awsvpc` (default)
 - Task Execution Role: `Create new role` (default if you've never created tasks before) or `ecsTaskExecutionRole` (default otherwise). Not to be confused with the `ecs.task.palworld-server` role we used earlier.
-- Task Memory: `2GB` (good to start, increase later if needed)
-- Task CPU: `1 vCPU` (good to start, increase later if needed)
+- Task Memory: `4GB` (good to start, increase later if needed)
+- Task CPU: `2 vCPU` (good to start, increase later if needed)
 
 Skip `Container Definitions` temporarily and scroll further down to Volumes. Click `Add volume`, call it `data`, volume type EFS. Select the filesystem id from the dropdown that we created above, the access point id we created above, and check the box for `Encryption in transit` and click Add.
 
 Scroll back up and click `Add container`. Use defaults except for these specifics:
 
 - Container name: `palworld-server`
-- Image:
-  - For Java edition: `itzg/palworld-server`
-  - For Bedrock edition: `itzg/palworld-bedrock-server`
+- Image: `thijsvanloef/palworld-server-docker`
+
 - Port Mappings:
-  - For Java edition: `25565 TCP`
-  - For Bedrock edition: `19132 UDP`
+  - GamePort `8212 UDP`
+  - QueryPOrt `27015 UDP`
+
+- InternalPort:
+  - RconPort: `25575 TCP`
 
 Under `Advanced container configuration` make these changes:
 
@@ -507,13 +508,13 @@ Under `Advanced container configuration` make these changes:
     - Any additional stuff you want from [Minecraft Java Docker Server Docs] or [Minecraft Bedrock Docker Server Docs]
 - Storage and Logging
   - Mount Points
-    - Source volume : `data`
-    - Container path: `/data`
+    - Source volume : `palworld/Pal/Saved`
+    - Container path: `/palworld/Pal/Saved`
 
 Click `Add` and then click `Add container` again to add a second container to the list. Use defaults except for these specifics:
 
 - Container name: `palworld-ecsfargate-watchdog`
-- Image: `doctorray/palworld-ecsfargate-watchdog` (source for this container within this project if you want to build/host it yourself)
+- Image: `coni524/palworld-ecsfargate-watchdog` (source for this container within this project if you want to build/host it yourself)
 
 Under `Advanced container configuration` make these changes:
 
@@ -531,6 +532,8 @@ Under `Advanced container configuration` make these changes:
   - `TWILIOTO` : `+1XXXYYYZZZZ` (your cell phone to get a text on)
   - `TWILIOAID` : Twilio account ID
   - `TWILIOAUTH` : Twilio auth code
+  - `RCONPASSWORD` : RCON Password
+
 
 If using Twilio to alert you when the server is ready and when it turns off, all four twilio variables must be specified. If publishing to an SNS topic, the `SNSTOPIC` variable must be specified.
 
@@ -569,14 +572,14 @@ Click `Next step`
   - Security Group: Click `Edit`
     - Create new security gruop
     - Security group name: Default is fine or call it `palworld-server`
-    - Inbound rules for security group (Java edition)
-      - Change `HTTP` to `Custom TCP`
-      - Port range: `25565`
+    - Inbound rules for security group (GamePort)
+      - Change `HTTP` to `Custom UDP`
+      - Port range: `8211`
       - Source: `Anywhere` is fine. Customizing this to specific source IPs is beyond the scope of this document.
       - Click `Save`
-    - Inbound rules for security group (Bedrock edition)
+    - Inbound rules for security group (QueryPort)
       - Change `HTTP` to `Custom UDP`
-      - Port range: `19132`
+      - Port range: `27015`
       - Source: `Anywhere` is fine. Customizing this to specific source IPs is beyond the scope of this document.
       - Click `Save`
     - Auto-assign public IP: `ENABLED` (default)
@@ -645,18 +648,8 @@ Click `Next`. For `Task Name` consider something like `palworld-efs-to-s3`. For 
   - Data to scan : Specific files and folders (Or pick the entire location if you don't want to specify each file below)
   - Transfer mode : Transfer only data that has changed
   - Keep deleted files / Overwrite files : Keep enabled as default
-  - Includes for Java edition: add three:
-    - `banned-ips.json`
-    - `banned-players.json`
-    - `ops.json`
-    - `usercache.json`
-    - `whitelist.json`
-    - `server.properties`
-    - `server-icon.png`
-  - Includes for Bedrock edition:
-    - `permissions.json`
-    - `whitelist.json`
-    - `server.properties`
+  - Includes for palworld world data: add three:
+    - 🚧 Any Files. 
 - Schedule : not scheduled, we'll run it on demand
 - Task logging
   - Log level : Do not send logs to CloudWatch
@@ -694,6 +687,8 @@ Click `Next` and `Create task`.
 
 ### Usage and file editing
 
+🚧 This section has not yet been updated.
+
 After you've launched the palworld server successfully once, it will create files in EFS such as `server.properties`, `ops.json`, `whitelist.json` among others. From the DataSync console, you can launch the `palworld-efs-to-s3` task, which will copy these files from the EFS share to your S3 bucket. Then you can download these files from S3 (using the console or something like [S3 Browser]), edit them on your computer, then use the same client to upload the files back to S3. Afterward, open DataSync and launch the `palworld-s3-to-efs` task to copy the updated files back to your EFS share. Then when you launch the server again, it will see and use the new files.
 
 Best practice would be, any time you want to make a change to always copy the latest files from EFS to S3 first while your server is off before editing them and copying them back. Otherwise you may unintentionally regress some settings.
@@ -726,13 +721,15 @@ Check all of the above, but also ensure you're using an EFS Access Point with th
 
 ### Can't connect to palworld server
 
-Refresh. Wait a minute, especially the first launch. Check ECS to see that the containers are in the RUNNING state. Open the running task, go to the logs tab, select palworld and see if there are any errors on the logs. Did you make sure you opened the right port (25565 TCP) to the world in the task security group?? Security groups can be edited from both the VPC and the EC2 console.
+Refresh. Wait a minute, especially the first launch. Check ECS to see that the containers are in the RUNNING state. Open the running task, go to the logs tab, select palworld and see if there are any errors on the logs. Did you make sure you opened the right port (8211 UDP and 27015 UDP) to the world in the task security group?? Security groups can be edited from both the VPC and the EC2 console.
 
 ### Not getting text messages
 
 Are your Twilio vars valid? Do you have sufficient funds on your Twilio account? Check the logs on the watchdog container for any curl errors.
 
 ## Server starts randomly?
+
+🚧 In this project, invocation from DNS queries is disabled.
 
 Remember, the server starts with a DNS query automatically. So, if you've got buddies you've shared the server with, it may start up if they open their multiplayer screen to play on a different server if yours is in the list! If this is an issue, it could probably be mitigated with a more advanced CloudWatch Subscription Filter that checks against the source IP address in addition to just the domain name, with it limiting to your ISP or location.
 
@@ -747,11 +744,9 @@ Set up a [Billing Alert]! You can get an email if your bill exceeds a certain am
 Open an issue, fork the repo, send me a pull request or a message.
 
 [Get started with Slack]: https://docs.aws.amazon.com/chatbot/latest/adminguide/slack-setup.html
-
-
 [finding your aws account id]: https://docs.aws.amazon.com/IAM/latest/UserGuide/console_account-alias.html#FindingYourAWSId
 [default vpc]: https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html
-[aws estimate]: https://calculator.aws/#/estimate?id=61e8ef3440b68927eb0da116e18628e3081875b6
+[aws estimate]: https://calculator.aws/#/estimate?id=ebd1972b24b7d393610389a0017d3e1f8df2ed56
 [dns served from route 53]: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring.html
 [delegate zone setup]: https://stackoverflow.com/questions/47527575/aws-policy-allow-update-specific-record-in-route53-hosted-zone
 [billing alert]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/monitor_estimated_charges_with_cloudwatch.html
