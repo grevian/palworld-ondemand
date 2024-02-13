@@ -20,7 +20,8 @@ import { Construct } from 'constructs';
 import { constants } from './constants';
 import { SSMParameterReader } from './ssm-parameter-reader';
 import { StackConfig } from './types';
-import { getPalworldServerConfig, isDockerInstalled } from './util';
+//import { getPalworldServerConfig, isDockerInstalled } from './util';
+import { getPalworldServerConfig } from './util';
 import { DockerImageAsset, Platform } from 'aws-cdk-lib/aws-ecr-assets';
 
 interface PalworldStackProps extends StackProps {
