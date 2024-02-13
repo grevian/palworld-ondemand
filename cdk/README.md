@@ -1,9 +1,7 @@
-# minecraft-ondemand: AWS Cloud Development Kit (CDK)
+# palworld-ondemand: AWS Cloud Development Kit (CDK)
 
-> Quick and easy deployment of an on-demand Minecraft server with configurable
+> Quick and easy deployment of an on-demand Palworld server with configurable
 > settings using [AWS CDK].
-
-# 🚧 **Under construction**: This section is still in progress. Stay tuned for updates.
 
 # Introduction
 
@@ -15,57 +13,11 @@ Linux friends should be able to adapt this to their needs.
 ## Prerequisites
 
 1. [Open an AWS Account]
-2. [Create an Admin IAM User] (Download and save the Access Key and Secret Key).  Alternatively you can generate Access Keys for your root user, but this is bad practice.
-3. [Install AWS CLI] and [configure it] with the keys from step 2.  Specifying the default region and output format are optional.
-4. [Pick](https://domains.google) [a](https://namecheap.com) [registrar](https://networksolutions.com) [and](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html) [register](https://domain.com) [a](https://register.com) [domain](https://godaddy.com) [name](https://enom.com).
-5. [Create a public hosted zone] for your domain name in Route 53.
-6. [Change the DNS servers] for your new domain to the ones listed in the Route 53 console from step 5.
-7. Install [NodeJS] (say yes to the chocolatey option)
-8. Install [Git] (Pick Notepad or Notepad++ for an editor even though you probably don't need to use it, all other defaults fine)
-
-## Procedure
-
-### 1. Clone the repository
-
-Open the a command prompt shell (perhaps the new "Node.js command prompt" icon in your start menu) and clone the `minecraft-ondemand` GitHub repository.
-
-```bash
-git clone https://github.com/doctorray117/minecraft-ondemand.git
-```
-
-### 2. Change to the CDK directory, create the environment file, and open it in an editor
-
-```bash
-cd minecraft-ondemand
-cd cdk
-copy .env.sample .env
-notepad .env
-```
-(replace `notepad` with your favorite text editor)
-
-### 3. Set the required configuration values
-
-The only **required** configuration value is `DOMAIN_NAME`.  This value should be the exact domain name you purchased and set up in Route53.  During setup, a dedicated subdomain zone will be added and an NS record will be added to this root zone.
-
-Setting an email address for an SNS topic is recommended.
-
-See the section on [Configuration](#configuration) for more configuration options.
-
-### 4. Build and Deploy
-
-All of the subsequent steps assume you are running from a terminal/command prompt window inside of the cdk directory.  Windows users might use the `Node.js command prompt` item in the start menu.
-
-Build and deploy the solution by running:
-
-```bash
-npm run build && npm run deploy
-```
-
-You may be asked to install a package like aws-cdk, this is fine to say yes to.  The full deployment will take a few minutes.
-
-### 5. Customize your server
-
-After you've launched your minecraft server the first time and you've waited for it to finishing generating the world with all defaults, you'll need to get in, make yourself an op, tweak settings, etc.  There are several ways to do this, many of which are outlined at [Usage and Customization] on the main page.
+2. [Create an Admin IAM User] (No access key required).
+3. [Pick](https://domains.google) [a](https://namecheap.com) [registrar](https://networksolutions.com) [and](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html) [register](https://domain.com) [a](https://register.com) [domain](https://godaddy.com) [name](https://enom.com).
+4. [Create a public hosted zone] for your domain name in Route 53.
+5. [Change the DNS servers] for your new domain to the ones listed in the Route 53 console from step 5.
+6. See the quick setup [Quick Start](https://github.com/coni524/palworld-ondemand?tab=readme-ov-file#quick-start)
 
 ## Additional Configuration
 
@@ -78,19 +30,22 @@ set in `.env`.
 | Config                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Default              |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | DOMAIN_NAME                   | **Required** Domain name of existing Route53 Hosted Zone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | --                   |
-| SUBDOMAIN_PART                | Name of the subdomain part to be used for creating a delegated hosted zone (minecraft.example.com) and an NS record on your existing (example.com) hosted zone. This subdomain should not already be in use.                                                                                                                                                                                                                                                                                                                                               | `minecraft`          |
-| SERVER_REGION                 | The AWS region to deploy your minecraft server in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `us-east-1`          |
-| MINECRAFT_EDITION             | Edition of Minecraft server to run. Accepted values are are `java` or `bedrock` for [Minecraft Java Docker] or [Minecraft Bedrock Docker], respectively.                                                                                                                                                                                                                                                                                                                                                                                                   | `java`               |
+| SUBDOMAIN_PART                | Name of the subdomain part to be used for creating a delegated hosted zone (palworld.example.com) and an NS record on your existing (example.com) hosted zone. This subdomain should not already be in use.                                                                                                                                                                                                                                                                                                                                               | `palworld`          |
+| SERVER_REGION                 | The AWS region to deploy your palworld server in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `us-east-1`          |
 | STARTUP_MINUTES               | Number of minutes to wait for a connection after starting before terminating                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `10`                 |
 | SHUTDOWN_MINUTES              | Number of minutes to wait after the last client disconnects before terminating                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `20`                 |
 | USE_FARGATE_SPOT              | Sets the preference for Fargate Spot. <br /><br />If you set it as `false`, your tasks will launch under the `FARGATE` strategy which currently will run about 5 cents per hour. You can leave it as `true` to use `FARGATE_SPOT`, and pay 1.5 cents per hour. While this is cheaper, technically AWS can terminate your instance at any time if they need the capacity. The watchdog is designed to intercept this termination command and shut down safely, it's fine to use Spot to save a few pennies, at the extremely low risk of game interruption. | `true`               |
-| TASK_MEMORY                   | The amount (in MiB) of memory used by the task running the Minecraft server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `2048`               |
-| TASK_CPU                      | The number of cpu units used by the task running the Minecraft server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `1024`               |
+| TASK_MEMORY                   | The amount (in MiB) of memory used by the task running the Palworld server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `2048`               |
+| TASK_CPU                      | The number of cpu units used by the task running the Palworld server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `1024`               |
 | VPC_ID                        | VPC ID to deploy your server in. When this value is not specified, a new VPC is automatically created by default.                                                                                                                                                                                                                                                                                                                                                                                                                                          | --                   |
 | TWILIO_PHONE_FROM             | Your twilio phone number. (i.e `+1XXXYYYZZZZ`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | --                   |
 | TWILIO_PHONE_TO               | Phone number to receive text notifications at.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | --                   |
 | TWILIO_ACCOUNT_ID             | Twilio account ID.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | --                   |
 | TWILIO_AUTH_CODE              | Twilio auth code.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | --                   |
+| SLACK_WORKSPACE_ID              | Slack workspace ID code.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | --                   |
+| SLACK_CHANNEL_ID              | Slack channel ID code.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | --                   |
+| ADMIN_PASSWORD              | RCON Password code.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | --                   |
+| SERVER_PASSWORD              | Palworld Password code.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | --                   |
 | DEBUG                         | Enables debug mode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | --                   |
 | CDK_NEW_BOOTSTRAP             | Addresses issue for some users relating to AWS move to bootstrap v2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `1`                  |
 
@@ -103,11 +58,11 @@ npm run destroy
 ```
 
 Note: Unless you changed the related configuration values, **running this script
-will delete everything deployed by this template including your minecraft server
+will delete everything deployed by this template including your palworld server
 data**.
 
-Alternatively, you can delete the `minecraft-server-stack` first, then the
-`minecraft-domain-stack` from the [AWS Console](https://console.aws.amazon.com/cloudformation/).
+Alternatively, you can delete the `palworld-server-stack` first, then the
+`palworld-domain-stack` from the [AWS Console](https://console.aws.amazon.com/cloudformation/).
 
 Note: the Route53 A record will need to be manually reset to 192.168.1.1 in order for CDK to properly destroy the resources.  This will be fixed later.
 
@@ -115,8 +70,8 @@ Note: the Route53 A record will need to be manually reset to 192.168.1.1 in orde
 
 Set the `DEBUG` value in your [configuration](#configuration) to `true` to enable the following:
 
-- CloudWatch Logs for the `minecraft-server` ECS Container
-- CloudWatch Logs for the `minecraft-ecsfargate-watchdog` ECS Container
+- CloudWatch Logs for the `palworld-server` ECS Container
+- CloudWatch Logs for the `palworld-ecsfargate-watchdog` ECS Container
 
 ### No Fargate configuration exists for given values
 
@@ -173,6 +128,6 @@ Most CDK destroy failures can be resolved by running it a second time.  Other re
   [Change the DNS servers]: <https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/migrate-dns-domain-inactive.html#migrate-dns-update-domain-inactive>
   [NodeJS]: <https://nodejs.org/en/download/>
   [Git]: <https://git-scm.com/download/win>
-  [Usage and Customization]: <https://github.com/doctorray117/minecraft-ondemand#usage-and-customization>
-  [minecraft java docker]: https://hub.docker.com/r/itzg/minecraft-server
-  [minecraft bedrock docker]: https://hub.docker.com/r/itzg/minecraft-bedrock-server
+  [Usage and Customization]: <https://github.com/doctorray117/palworld-ondemand#usage-and-customization>
+  [palworld java docker]: https://hub.docker.com/r/itzg/palworld-server
+  [palworld bedrock docker]: https://hub.docker.com/r/itzg/palworld-bedrock-server
