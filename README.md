@@ -1,6 +1,19 @@
+<div align="center">
+  <a href="https://github.com/coni524/palworld-ondemand/stargazers"><img src="https://img.shields.io/github/stars/coni524/palworld-ondemand" alt="Stars Badge"/></a>
+<a href="https://github.com/coni524/palworld-ondemand/network/members"><img src="https://img.shields.io/github/forks/coni524/palworld-ondemand" alt="Forks Badge"/></a>
+<a href="https://github.com/coni524/palworld-ondemand/pulls"><img src="https://img.shields.io/github/issues-pr/coni524/palworld-ondemand" alt="Pull Requests Badge"/></a>
+<a href="https://github.com/coni524/palworld-ondemand/issues"><img src="https://img.shields.io/github/issues/coni524/palworld-ondemand" alt="Issues Badge"/></a>
+<a href="https://github.com/coni524/palworld-ondemand/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/coni524/palworld-ondemand?color=2b9348"></a>
+<a href="https://github.com/coni524/palworld-ondemand/blob/master/LICENSE"><img src="https://img.shields.io/github/license/coni524/palworld-ondemand?color=2b9348" alt="License Badge"/></a>
+</div>
+
 # palworld-ondemand
 
-Almost free serverless on-demand Palworld Dedicated Server in AWS
+On-demand Palworld Dedicated Server in AWS
+
+Acknowledgments:
+
+This project is inspired by and forked from the minecraft-ondemand project created by @doctorray117. We express our heartfelt gratitude for the foundational work and the innovative idea behind running game servers on-demand in the cloud. Special thanks to the original author for their contribution to the community and for making the initial project open-source.
 
 ## Table of Contents
 
@@ -61,6 +74,7 @@ Almost free serverless on-demand Palworld Dedicated Server in AWS
     - [Not getting text messages](#not-getting-text-messages)
   - [Server starts randomly?](#server-starts-randomly)
 - [Other Stuff](#other-stuff)
+  - [README Template](#readme-template)
   - [Concerned about cost overruns?](#concerned-about-cost-overruns)
   - [Suggestions, comments, concerns?](#suggestions-comments-concerns)
 
@@ -734,6 +748,10 @@ Are your Twilio vars valid? Do you have sufficient funds on your Twilio account?
 Remember, the server starts with a DNS query automatically. So, if you've got buddies you've shared the server with, it may start up if they open their multiplayer screen to play on a different server if yours is in the list! If this is an issue, it could probably be mitigated with a more advanced CloudWatch Subscription Filter that checks against the source IP address in addition to just the domain name, with it limiting to your ISP or location.
 
 # Other Stuff
+
+## README Template
+
+[awesome-README-templates](https://github.com/elangosundar/awesome-README-templates?tab=readme-ov-file)
 
 ## Concerned about cost overruns?
 
