@@ -11,6 +11,8 @@
 
 On-demand Palworld Dedicated Server in AWS
 
+[日本語版](./README-ja.md)
+
 Acknowledgments:
 
 This project is inspired by and forked from the minecraft-ondemand project created by @doctorray117. We express our heartfelt gratitude for the foundational work and the innovative idea behind running game servers on-demand in the cloud. Special thanks to the original author for their contribution to the community and for making the initial project open-source.
@@ -85,7 +87,7 @@ This project is inspired by and forked from the minecraft-ondemand project creat
 - A domain name with a public DNS provided by Route 53; there is no need to register the domain through Route 53.
 - The creation of a Route53 zone must be completed for the domain name you own. [DNS served from Route 53].
 - Palworld client
-- AWS Chatbot already integrated with Slack. [Get started with Slack]
+- AWS Chatbot integrated with Slack. [Get started with Slack]
 
 ## Diagram
 
