@@ -1,38 +1,41 @@
 import * as path from 'path';
 import {
-  Stack,
-  StackProps,
-  aws_ec2 as ec2,
-  aws_efs as efs,
-  aws_iam as iam,
-  aws_ecs as ecs,
-  aws_logs as logs,
-  aws_sns as sns,
-  RemovalPolicy,
-  Arn,
-  ArnFormat,
+    Arn,
+    ArnFormat,
+    aws_ec2 as ec2,
+    aws_ecs as ecs,
+    aws_efs as efs,
+    aws_iam as iam,
+    aws_logs as logs,
+    aws_logs_destinations as logDestinations,
+    aws_sns as sns, CfnOutput,
+    RemovalPolicy,
+    Stack,
+    StackProps,
 } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { Runtime } from 'aws-cdk-lib/aws-lambda';
-import * as chatbot from 'aws-cdk-lib/aws-chatbot';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import { Construct } from 'constructs';
-import { constants } from './constants';
-import { SSMParameterReader } from './ssm-parameter-reader';
-import { StackConfig } from './types';
-//import { getPalworldServerConfig, isDockerInstalled } from './util';
-import { getPalworldServerConfig } from './util';
-import { DockerImageAsset, Platform } from 'aws-cdk-lib/aws-ecr-assets';
+import {Construct} from 'constructs';
+import {constants} from './constants';
+import {StackConfig} from './types';
+import {getPalworldServerConfig} from './util';
+import {WatchdogContainerConstruct} from "./watchdog-container";
+import {Domain} from "./domain";
+import {Protocol} from "aws-cdk-lib/aws-ecs";
 
 interface PalworldStackProps extends StackProps {
   config: Readonly<StackConfig>;
 }
 
 export class PalworldStack extends Stack {
+    public readonly snsNotificationTopic: sns.Topic;
+    public readonly launcherLambda: lambda.Function;
+
   constructor(scope: Construct, id: string, props: PalworldStackProps) {
     super(scope, id, props);
 
     const { config } = props;
+
+    const palworldDomain = new Domain(this, id, config.domainName, config.subdomainPart);
 
     const vpc = config.vpcId
       ? ec2.Vpc.fromLookup(this, 'Vpc', { vpcId: config.vpcId })
@@ -41,9 +44,43 @@ export class PalworldStack extends Stack {
           natGateways: 0,
         });
 
+    // Create a lambda function to spin the server up and down on demand
+      const launcherLambda = new lambda.Function(this, 'LauncherLambda', {
+          code: lambda.Code.fromAsset(path.resolve(__dirname, '../../lambda')),
+          handler: 'lambda_function.lambda_handler',
+          runtime: lambda.Runtime.PYTHON_3_11,
+          environment: {
+              REGION: config.serverRegion,
+              CLUSTER: constants.CLUSTER_NAME,
+              SERVICE: constants.SERVICE_NAME,
+          },
+          logRetention: logs.RetentionDays.THREE_DAYS, // TODO: parameterize
+      });
+      const fnURL = launcherLambda.addFunctionUrl({
+          authType: lambda.FunctionUrlAuthType.NONE
+      })
+      new CfnOutput(this, 'TheUrl', {
+          value: fnURL.url,
+      });
+
+      this.launcherLambda = launcherLambda
+
+      /**
+       * Give cloudwatch permission to invoke our lambda when our subscription filter
+       * picks up DNS queries.
+       */
+      launcherLambda.addPermission('CWPermission', {
+          principal: new iam.ServicePrincipal(
+              `logs.${constants.DOMAIN_STACK_REGION}.amazonaws.com`
+          ),
+          action: 'lambda:InvokeFunction',
+          sourceAccount: this.account,
+          sourceArn: palworldDomain.dnsLogGroup.logGroupArn,
+      });
+
     const fileSystem = new efs.FileSystem(this, 'FileSystem', {
       vpc,
-      removalPolicy: RemovalPolicy.SNAPSHOT,
+      removalPolicy: RemovalPolicy.RETAIN,
     });
 
     const accessPoint = new efs.AccessPoint(this, 'AccessPoint', {
@@ -136,19 +173,29 @@ export class PalworldStack extends Stack {
             hostPort: palworldServerConfig.gamePort,
             protocol: palworldServerConfig.protocol,
           },
+          {
+            containerPort: palworldServerConfig.rconPort,
+            hostPort: palworldServerConfig.rconPort,
+            protocol: Protocol.TCP,
+          },
         ],
         essential: false,
         taskDefinition,
         environment: {
           ADMIN_PASSWORD: config.palworld.adminPassword,
           SERVER_PASSWORD: config.palworld.serverPassword,
+          DISCORD_WEBHOOK_URL: config.discord.webhookURL,
+          MULTITHREADING: String(config.multithreaded),
+            SERVER_NAME: "Beebworld",
+            SERVER_DESCRIPTION: "Not Boobworld",
+            EXP_RATE: "10.0",
+            PLAYER_AUTO_HP_REGEN_RATE: "2.0",
+            PAL_CAPTURE_RATE: "2.0",
         },
-        logging: config.debug
-          ? new ecs.AwsLogDriver({
-              logRetention: logs.RetentionDays.THREE_DAYS,
+        logging: new ecs.AwsLogDriver({
+              logRetention: logs.RetentionDays.ONE_MONTH,
               streamPrefix: constants.MC_SERVER_CONTAINER_NAME,
             })
-          : undefined,
       }
     );
 
@@ -176,6 +223,11 @@ export class PalworldStack extends Stack {
       ec2.Peer.anyIpv4(),
       ec2.Port.udp(palworldServerConfig.gamePort),
       'Allow inbound traffic to Game Port'
+    );
+    serviceSecurityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(palworldServerConfig.rconPort),
+        'Allow inbound traffic to RCON Port'
     );
 
     const palworldServerService = new ecs.FargateService(
@@ -207,96 +259,27 @@ export class PalworldStack extends Stack {
       palworldServerService.connections
     );
 
-    const hostedZoneId = new SSMParameterReader(
-      this,
-      'Route53HostedZoneIdReader',
-      {
-        parameterName: constants.HOSTED_ZONE_SSM_PARAMETER,
-        region: constants.DOMAIN_STACK_REGION,
-      }
-    ).getParameterValue();
-
-
-    const launcherLambdaArn = new SSMParameterReader(
-      this,
-      'launcherLambdaArn',
-      {
-        parameterName: constants.LAUNCHER_LAMBDA_ARN_SSM_PARAMETER,
-        region: constants.DOMAIN_STACK_REGION,
-      }
-    ).getParameterValue();
-    const launcherLambda = iam.Role.fromRoleArn(
-      this,
-      'LauncherLambdaArn',
-      launcherLambdaArn
-    );
-
-    // IAMロールの作成
-    const chatbotRole = new iam.Role(this, 'ChatbotRole', {
-      assumedBy: new iam.ServicePrincipal('chatbot.amazonaws.com'),
-    });
-
-    // Lambda関数への実行権限を付与するポリシーステートメントを追加
-    chatbotRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['lambda:InvokeFunction'],
-      resources: [launcherLambdaArn],
-    }));
-
-    let snsTopicArn = '';
-    // Add Slack Channel Configuration
-    const slackChannel = new chatbot.SlackChannelConfiguration(
-      this,
-      'PalworldServerSlackChannel',
-      {
-        slackChannelConfigurationName: config.slack.slackChannelName,
-        slackWorkspaceId: config.slack.slackWorkspaceId,
-        slackChannelId: config.slack.slackChannelId,
-        role: chatbotRole
-      }
-    );
-
     // Define SNS Topic
     const snsTopic = new sns.Topic(this, 'PalworldServerSnsTopic');
     snsTopic.grantPublish(ecsTaskRole);
+    this.snsNotificationTopic = snsTopic;
 
-    // Set up the SNS Topic as the notification topic for the Slack Channel
-    slackChannel.addNotificationTopic(snsTopic);
-
-    // Set the SNS Topic ARN
-    snsTopicArn = snsTopic.topicArn;
-
-    // const image = new DockerImageAsset(this, 'CDKDockerImage', {
-    //   directory: path.join(__dirname, '../../palworld-ecsfargate-watchdog/'),
-    //   platform: Platform.LINUX_AMD64,
-    //   // buildArgs
-    //   buildArgs: {
-    //     RCONPASSWORD: config.palworld.adminPassword,
-    //   },
-    // });
-
-    //const containerImage = ecs.ContainerImage.fromDockerImageAsset(image);
+    const watchdogContainerConstruct = new WatchdogContainerConstruct(this, 'palworld-watchdog-image', config.palworld.adminPassword)
 
     const watchdogContainer = new ecs.ContainerDefinition(
       this,
       'WatchDogContainer',
       {
         containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME,
-        // image: isDockerInstalled()
-        //   ? containerImage
-        //   : ecs.ContainerImage.fromRegistry(
-        //       'doctorray/minecraft-ecsfargate-watchdog'
-        //     ),
-        image: ecs.ContainerImage.fromRegistry(
-          'coni524/palworld-ecsfargate-watchdog'
-        ),
+        image: ecs.ContainerImage.fromDockerImageAsset(watchdogContainerConstruct.containerImage),
         essential: true,
         taskDefinition: taskDefinition,
         environment: {
           CLUSTER: constants.CLUSTER_NAME,
           SERVICE: constants.SERVICE_NAME,
-          DNSZONE: hostedZoneId,
+          DNSZONE: palworldDomain.domain.hostedZoneId,
           SERVERNAME: `${config.subdomainPart}.${config.domainName}`,
-          SNSTOPIC: snsTopicArn,
+          SNSTOPIC: snsTopic.topicArn,
           TWILIOFROM: config.twilio.phoneFrom,
           TWILIOTO: config.twilio.phoneTo,
           TWILIOAID: config.twilio.accountId,
@@ -305,12 +288,10 @@ export class PalworldStack extends Stack {
           SHUTDOWNMIN: config.shutdownMinutes,
           RCONPASSWORD: config.palworld.adminPassword,
         },
-        logging: config.debug
-          ? new ecs.AwsLogDriver({
-              logRetention: logs.RetentionDays.THREE_DAYS,
+        logging: new ecs.AwsLogDriver({
+              logRetention: logs.RetentionDays.ONE_MONTH,
               streamPrefix: constants.WATCHDOG_SERVER_CONTAINER_NAME,
             })
-          : undefined,
       }
     );
 
@@ -345,22 +326,9 @@ export class PalworldStack extends Stack {
     serviceControlPolicy.attachToRole(ecsTaskRole);
 
     /**
-     * Add service control policy to the launcher lambda from the other stack
+     * Add service control policy to the launcher lambda
      */
-    const launcherLambdaRoleArn = new SSMParameterReader(
-      this,
-      'launcherLambdaRoleArn',
-      {
-        parameterName: constants.LAUNCHER_LAMBDA_ROLE_ARN_SSM_PARAMETER,
-        region: constants.DOMAIN_STACK_REGION,
-      }
-    ).getParameterValue();
-    const launcherLambdaRole = iam.Role.fromRoleArn(
-      this,
-      'LauncherLambdaRole',
-      launcherLambdaRoleArn
-    );
-    serviceControlPolicy.attachToRole(launcherLambdaRole);
+    serviceControlPolicy.attachToRole(launcherLambda.role!);
 
     /**
      * This policy gives permission to our ECS task to update the A record
@@ -377,10 +345,17 @@ export class PalworldStack extends Stack {
             'route53:ChangeResourceRecordSets',
             'route53:ListResourceRecordSets',
           ],
-          resources: [`arn:aws:route53:::hostedzone/${hostedZoneId}`],
+          resources: [`arn:aws:route53:::hostedzone/${palworldDomain.domain.hostedZoneId}`],
         }),
       ],
     });
     iamRoute53Policy.attachToRole(ecsTaskRole);
+
+
+    palworldDomain.dnsLogGroup.addSubscriptionFilter('SubscriptionFilter', {
+        destination: new logDestinations.LambdaDestination(launcherLambda),
+        filterPattern: logs.FilterPattern.anyTerm(palworldDomain.domain.zoneName),
+    });
+
   }
 }

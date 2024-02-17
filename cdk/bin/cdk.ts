@@ -2,9 +2,11 @@
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { PalworldStack } from '../lib/palworld-stack';
-import { DomainStack } from '../lib/domain-stack';
+import { Domain } from '../lib/domain';
 import { constants } from '../lib/constants';
 import { resolveConfig } from '../lib/config';
+import {ChatbotStack} from "../lib/chat-integration";
+import * as domain from "domain";
 
 const app = new cdk.App();
 
@@ -15,26 +17,27 @@ if (!config.domainName) {
     `.env.sample` to `.env` and add your domain name.');
 }
 
-const domainStack = new DomainStack(app, 'palworld-domain-stack', {
-  env: {
-    /**
-     * Because we are relying on Route 53+CloudWatch to invoke the Lambda function,
-     * it _must_ reside in the N. Virginia (us-east-1) region.
-     */
-    region: constants.DOMAIN_STACK_REGION,
-    /* Account must be specified to allow for hosted zone lookup */
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-  },
-  config,
-});
-
 const palworldStack = new PalworldStack(app, 'palworld-server-stack', {
   env: {
     region: config.serverRegion,
     /* Account must be specified to allow for VPC lookup */
     account: process.env.CDK_DEFAULT_ACCOUNT,
   },
+  tags: {
+    Application: 'palworld-server'
+  },
   config,
 });
 
-palworldStack.addDependency(domainStack);
+// const chatbotStack = new ChatbotStack(app, 'palworld-bot-stack', {
+//   env: {
+//     region: config.serverRegion,
+//     /* Account must be specified to allow for VPC lookup */
+//     account: process.env.CDK_DEFAULT_ACCOUNT,
+//   },
+//   config,
+//   launcherLambda: palworldStack.launcherLambda,
+//   snsNotificationTopic: palworldStack.snsNotificationTopic
+// })
+//
+// chatbotStack.addDependency(palworldStack);
